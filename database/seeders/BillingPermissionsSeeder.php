@@ -12,24 +12,24 @@ class BillingPermissionsSeeder extends Seeder
     /**
      * Run the database seeds.
      *
-     * billing.view/issue/retry already exist in RolesAndPermissionsSeeder's
-     * permission list, but only billing.view was assigned to roles there.
-     * This seeder additively grants billing.issue/retry to the roles that
-     * actually operate the billing module.
+     * billing.view/issue/retry/credit_note already exist in
+     * RolesAndPermissionsSeeder's permission list, but only billing.view
+     * was assigned to roles there. This seeder additively grants the
+     * others to the roles that actually operate the billing module.
      */
     public function run(): void
     {
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        $permissions = ['billing.view', 'billing.issue', 'billing.retry'];
+        $permissions = ['billing.view', 'billing.issue', 'billing.retry', 'billing.credit_note'];
 
         foreach ($permissions as $permission) {
             Permission::findOrCreate($permission, 'web');
         }
 
         $rolesPermissions = [
-            'Gerente' => ['billing.issue', 'billing.retry'],
-            'Vendedor' => ['billing.issue', 'billing.retry'],
+            'Gerente' => ['billing.issue', 'billing.retry', 'billing.credit_note'],
+            'Vendedor' => ['billing.issue', 'billing.retry', 'billing.credit_note'],
         ];
 
         foreach ($rolesPermissions as $roleName => $rolePerms) {

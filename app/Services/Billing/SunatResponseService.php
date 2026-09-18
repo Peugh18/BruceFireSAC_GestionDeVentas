@@ -2,6 +2,7 @@
 
 namespace App\Services\Billing;
 
+use App\Models\CreditDebitNote;
 use App\Models\ElectronicDocument;
 use App\Notifications\SunatErrorNotification;
 use App\Services\Billing\Data\SunatSendResult;
@@ -55,6 +56,55 @@ class SunatResponseService
         }
 
         $document->update($updates);
+    }
+
+    /**
+     * Same as apply(), for a nota de credito/debito instead of a CPE.
+     */
+    public function applyToNote(CreditDebitNote $note, SunatSendResult $result): void
+    {
+        $updates = [
+            'fecha_envio' => now(),
+        ];
+
+        if ($result->xml !== null) {
+            $updates['xml_path'] = $this->storeNoteXml($note, $result->xml);
+            $updates['hash'] = hash('sha256', $result->xml);
+        }
+
+        if (! $result->success) {
+            $updates['estado'] = 'error';
+            $updates['error'] = $result->errorMessage;
+            $note->update($updates);
+
+            return;
+        }
+
+        if ($result->cdrZip !== null) {
+            $updates['cdr_path'] = $this->storeNoteCdr($note, $result->cdrZip);
+        }
+
+        $updates['respuesta_sunat'] = trim("{$result->code} - {$result->description}", ' -');
+        $updates['error'] = null;
+        $updates['estado'] = $result->isAccepted() ? 'aceptado' : 'rechazado';
+
+        $note->update($updates);
+    }
+
+    private function storeNoteXml(CreditDebitNote $note, string $xml): string
+    {
+        $path = "billing/notes/xml/{$note->tipo}-{$note->serie}-{$note->correlativo}.xml";
+        Storage::disk('local')->put($path, $xml);
+
+        return $path;
+    }
+
+    private function storeNoteCdr(CreditDebitNote $note, string $cdrZip): string
+    {
+        $path = "billing/notes/cdr/{$note->tipo}-{$note->serie}-{$note->correlativo}.zip";
+        Storage::disk('local')->put($path, $cdrZip);
+
+        return $path;
     }
 
     private function storeXml(ElectronicDocument $document, string $xml): string

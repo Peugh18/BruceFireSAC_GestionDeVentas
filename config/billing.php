@@ -54,4 +54,19 @@ return [
         'boleta' => 'B001',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Credit/Debit Note Series
+    |--------------------------------------------------------------------------
+    |
+    | SUNAT requires NC/ND series to start with a different letter pair than
+    | the invoice series they affect, keyed by the affected CPE's tipo.
+    |
+    */
+
+    'note_series' => [
+        'nota_credito' => ['factura' => 'FC01', 'boleta' => 'BC01'],
+        'nota_debito' => ['factura' => 'FD01', 'boleta' => 'BD01'],
+    ],
+
 ];

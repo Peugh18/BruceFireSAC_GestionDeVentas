@@ -2,13 +2,21 @@ import HeadingSmall from '@/components/heading-small';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import InputError from '@/components/input-error';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type SharedData } from '@/types';
+import { type CreditDebitNoteEstado, type CreditDebitNoteTipo } from '@/types/credit-debit-note';
 import { type ElectronicDocumentData, type ElectronicDocumentEstado } from '@/types/electronic-document';
 import { type InstallmentEstado, type Sale, type SaleEstado } from '@/types/sale';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { AlertCircle, ArrowLeft, CheckCircle2, Clock, RefreshCw, ShieldAlert, XCircle } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, Clock, FileMinus, RefreshCw, ShieldAlert, XCircle } from 'lucide-react';
+import { FormEventHandler, useState } from 'react';
 
 const ESTADO_BADGE_VARIANT: Record<SaleEstado, 'default' | 'secondary' | 'destructive'> = {
     pendiente: 'secondary',
@@ -37,25 +45,167 @@ const DOCUMENT_ICON: Record<ElectronicDocumentEstado, typeof CheckCircle2> = {
     error: AlertCircle,
 };
 
+const NOTE_BADGE_VARIANT: Record<CreditDebitNoteEstado, 'default' | 'secondary' | 'destructive'> = {
+    pendiente: 'secondary',
+    aceptado: 'default',
+    rechazado: 'destructive',
+    error: 'destructive',
+};
+
 const formatCurrency = (amount: number | string) => {
     const numeric = typeof amount === 'string' ? parseFloat(amount) : amount;
     return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(numeric || 0);
 };
+
+function CreditDebitNoteDialog({
+    electronicDocument,
+    noteTipoLabels,
+    noteMotivoLabels,
+    open,
+    onOpenChange,
+}: {
+    electronicDocument: ElectronicDocumentData;
+    noteTipoLabels: Record<string, string>;
+    noteMotivoLabels: Record<string, Record<string, string>>;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
+    const { data, setData, post, processing, errors, reset } = useForm({
+        tipo: 'nota_credito' as CreditDebitNoteTipo,
+        motivo: '',
+        detalle: '',
+        importe: '',
+        fecha: new Date().toISOString().slice(0, 10),
+    });
+
+    const motivoOptions = noteMotivoLabels[data.tipo] ?? {};
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        post(route('billing.credit-debit-notes.store', electronicDocument.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                reset();
+                onOpenChange(false);
+            },
+        });
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <form onSubmit={submit} className="space-y-4">
+                    <DialogHeader>
+                        <DialogTitle>Emitir Nota de Crédito/Débito</DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="note-tipo">Tipo</Label>
+                        <Select
+                            value={data.tipo}
+                            onValueChange={(value: CreditDebitNoteTipo) => {
+                                setData((prev) => ({ ...prev, tipo: value, motivo: '' }));
+                            }}
+                        >
+                            <SelectTrigger id="note-tipo">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {Object.entries(noteTipoLabels).map(([value, label]) => (
+                                    <SelectItem key={value} value={value}>
+                                        {label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <InputError message={errors.tipo} />
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="note-motivo">Motivo</Label>
+                        <Select value={data.motivo} onValueChange={(value) => setData('motivo', value)}>
+                            <SelectTrigger id="note-motivo">
+                                <SelectValue placeholder="Selecciona un motivo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {Object.entries(motivoOptions).map(([value, label]) => (
+                                    <SelectItem key={value} value={value}>
+                                        {label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <InputError message={errors.motivo} />
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="note-detalle">Detalle</Label>
+                        <Textarea
+                            id="note-detalle"
+                            value={data.detalle}
+                            onChange={(e) => setData('detalle', e.target.value)}
+                            placeholder="Explica el motivo de la nota"
+                            rows={3}
+                        />
+                        <InputError message={errors.detalle} />
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="note-importe">Importe (S/)</Label>
+                            <Input
+                                id="note-importe"
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={data.importe}
+                                onChange={(e) => setData('importe', e.target.value)}
+                            />
+                            <InputError message={errors.importe} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="note-fecha">Fecha</Label>
+                            <Input id="note-fecha" type="date" value={data.fecha} onChange={(e) => setData('fecha', e.target.value)} />
+                            <InputError message={errors.fecha} />
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                            Cancelar
+                        </Button>
+                        <Button type="submit" disabled={processing}>
+                            {processing ? 'Enviando...' : 'Emitir y enviar a SUNAT'}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 function BillingCard({
     sale,
     electronicDocument,
     tipoLabels,
     estadoLabels,
+    noteTipoLabels,
+    noteEstadoLabels,
+    noteMotivoLabels,
 }: {
     sale: Sale;
     electronicDocument: ElectronicDocumentData | null;
     tipoLabels: Record<string, string>;
     estadoLabels: Record<string, string>;
+    noteTipoLabels: Record<string, string>;
+    noteEstadoLabels: Record<string, string>;
+    noteMotivoLabels: Record<string, Record<string, string>>;
 }) {
     const { auth } = usePage<SharedData>().props;
     const canIssue = auth.permissions.includes('billing.issue');
     const canRetry = auth.permissions.includes('billing.retry');
+    const canCreateNote = auth.permissions.includes('billing.credit_note');
+    const [noteDialogOpen, setNoteDialogOpen] = useState(false);
 
     const issueForm = useForm({});
     const retryForm = useForm({});
@@ -155,7 +305,7 @@ function BillingCard({
                     </div>
                 )}
 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <Button variant="outline" size="sm" onClick={refresh} className="gap-1.5">
                         <RefreshCw className="size-3.5" /> Actualizar estado
                     </Button>
@@ -164,8 +314,42 @@ function BillingCard({
                             {retryForm.processing ? 'Reintentando...' : 'Reintentar envio'}
                         </Button>
                     )}
+                    {electronicDocument.estado === 'aceptado' && canCreateNote && (
+                        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setNoteDialogOpen(true)}>
+                            <FileMinus className="size-3.5" /> Nota de crédito/débito
+                        </Button>
+                    )}
                 </div>
+
+                {electronicDocument.credit_debit_notes && electronicDocument.credit_debit_notes.length > 0 && (
+                    <div className="space-y-2 border-t pt-3">
+                        <p className="text-xs font-medium text-muted-foreground">Notas emitidas</p>
+                        {electronicDocument.credit_debit_notes.map((note) => (
+                            <div key={note.id} className="flex items-center justify-between gap-2 text-sm">
+                                <div className="min-w-0">
+                                    <p className="truncate font-medium">
+                                        {noteTipoLabels[note.tipo] ?? note.tipo} {note.serie}-{note.correlativo}
+                                    </p>
+                                    <p className="truncate text-xs text-muted-foreground">{note.detalle}</p>
+                                </div>
+                                <Badge variant={NOTE_BADGE_VARIANT[note.estado]} className="shrink-0">
+                                    {noteEstadoLabels[note.estado] ?? note.estado}
+                                </Badge>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </CardContent>
+
+            {canCreateNote && (
+                <CreditDebitNoteDialog
+                    electronicDocument={electronicDocument}
+                    noteTipoLabels={noteTipoLabels}
+                    noteMotivoLabels={noteMotivoLabels}
+                    open={noteDialogOpen}
+                    onOpenChange={setNoteDialogOpen}
+                />
+            )}
         </Card>
     );
 }
@@ -175,12 +359,18 @@ export default function SaleShow({
     electronicDocument,
     tipoLabels,
     estadoLabels,
+    noteTipoLabels,
+    noteEstadoLabels,
+    noteMotivoLabels,
     status,
 }: {
     sale: Sale;
     electronicDocument: ElectronicDocumentData | null;
     tipoLabels: Record<string, string>;
     estadoLabels: Record<string, string>;
+    noteTipoLabels: Record<string, string>;
+    noteEstadoLabels: Record<string, string>;
+    noteMotivoLabels: Record<string, Record<string, string>>;
     status?: string;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
@@ -284,7 +474,15 @@ export default function SaleShow({
                         </CardContent>
                     </Card>
 
-                    <BillingCard sale={sale} electronicDocument={electronicDocument} tipoLabels={tipoLabels} estadoLabels={estadoLabels} />
+                    <BillingCard
+                        sale={sale}
+                        electronicDocument={electronicDocument}
+                        tipoLabels={tipoLabels}
+                        estadoLabels={estadoLabels}
+                        noteTipoLabels={noteTipoLabels}
+                        noteEstadoLabels={noteEstadoLabels}
+                        noteMotivoLabels={noteMotivoLabels}
+                    />
                 </div>
 
                 <Card>

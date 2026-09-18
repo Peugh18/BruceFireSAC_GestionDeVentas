@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreSaleRequest;
 use App\Models\CatalogItem;
 use App\Models\Client;
+use App\Models\CreditDebitNote;
 use App\Models\ElectronicDocument;
 use App\Models\Sale;
 use Illuminate\Http\RedirectResponse;
@@ -166,13 +167,21 @@ class SaleController extends Controller
             'installments',
         ]);
 
-        $electronicDocument = ElectronicDocument::where('sale_id', $sale->id)->first();
+        $electronicDocument = ElectronicDocument::where('sale_id', $sale->id)
+            ->with('creditDebitNotes')
+            ->first();
 
         return Inertia::render('sales/show', [
             'sale' => $sale,
             'electronicDocument' => $electronicDocument,
             'tipoLabels' => ElectronicDocument::TIPO_LABELS,
             'estadoLabels' => ElectronicDocument::ESTADO_LABELS,
+            'noteTipoLabels' => CreditDebitNote::TIPO_LABELS,
+            'noteEstadoLabels' => CreditDebitNote::ESTADO_LABELS,
+            'noteMotivoLabels' => [
+                'nota_credito' => CreditDebitNote::MOTIVO_CREDITO_LABELS,
+                'nota_debito' => CreditDebitNote::MOTIVO_DEBITO_LABELS,
+            ],
         ]);
     }
 }

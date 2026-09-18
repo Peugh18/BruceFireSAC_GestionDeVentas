@@ -6,6 +6,7 @@ use Database\Factories\ElectronicDocumentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ElectronicDocument extends Model
 {
@@ -53,6 +54,12 @@ class ElectronicDocument extends Model
     public function sale(): BelongsTo
     {
         return $this->belongsTo(Sale::class);
+    }
+
+    /** @return HasMany<CreditDebitNote, $this> */
+    public function creditDebitNotes(): HasMany
+    {
+        return $this->hasMany(CreditDebitNote::class, 'cpe_afectado_id');
     }
 
     public function numeroCompleto(): string

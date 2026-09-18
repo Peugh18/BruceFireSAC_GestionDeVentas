@@ -2,6 +2,7 @@
 
 namespace App\Services\Billing;
 
+use App\Services\Billing\Data\CreditDebitNoteData;
 use App\Services\Billing\Data\SaleDocumentData;
 use App\Services\Billing\Data\SunatSendResult;
 use App\Services\Shipping\Data\ShippingGuideData;
@@ -20,6 +21,7 @@ use Greenter\Model\Sale\Cuota;
 use Greenter\Model\Sale\FormaPagos\FormaPagoContado;
 use Greenter\Model\Sale\FormaPagos\FormaPagoCredito;
 use Greenter\Model\Sale\Invoice;
+use Greenter\Model\Sale\Note;
 use Greenter\Model\Sale\SaleDetail;
 use Greenter\See;
 use Throwable;
@@ -27,10 +29,11 @@ use Throwable;
 /**
  * The only class in the application allowed to know about Greenter. It
  * turns neutral DTOs (SaleDocumentData for Factura/Boleta, ShippingGuideData
- * for GRE) into Greenter's model classes, signs and sends them to SUNAT, and
- * translates the response back into a plain SunatSendResult that the rest of
- * the app can consume. GRE uses a different Greenter document (Despatch) and
- * a different SUNAT endpoint than Invoice, but shares this same boundary.
+ * for GRE, CreditDebitNoteData for NC/ND) into Greenter's model classes,
+ * signs and sends them to SUNAT, and translates the response back into a
+ * plain SunatSendResult that the rest of the app can consume. GRE uses a
+ * different Greenter document (Despatch) and a different SUNAT endpoint
+ * than Invoice/Note, but shares this same boundary.
  */
 class GreenterService
 {
@@ -44,6 +47,21 @@ class GreenterService
             $see = $this->seeFor(config('billing.sunat.endpoint'));
 
             $result = $see->send($invoice);
+            $xml = $see->getFactory()->getLastXml();
+
+            return $this->mapResult($result, $xml);
+        } catch (Throwable $e) {
+            return SunatSendResult::failed($e->getMessage());
+        }
+    }
+
+    public function sendNote(CreditDebitNoteData $data): SunatSendResult
+    {
+        try {
+            $note = $this->buildNote($data);
+            $see = $this->seeFor(config('billing.sunat.endpoint'));
+
+            $result = $see->send($note);
             $xml = $see->getFactory()->getLastXml();
 
             return $this->mapResult($result, $xml);
@@ -170,6 +188,51 @@ class GreenterService
         }
 
         return new FormaPagoContado;
+    }
+
+    private function buildNote(CreditDebitNoteData $data): Note
+    {
+        $company = $this->buildCompany();
+
+        $client = (new GreenterClient)
+            ->setTipoDoc($data->clientTipoDoc)
+            ->setNumDoc($data->clientNumDoc)
+            ->setRznSocial($data->clientRznSocial);
+
+        $detail = (new SaleDetail)
+            ->setCodProducto('NC-ND')
+            ->setUnidad('NIU')
+            ->setCantidad(1)
+            ->setDescripcion($data->descripcion)
+            ->setMtoValorUnitario($data->valorVenta)
+            ->setMtoValorVenta($data->valorVenta)
+            ->setMtoPrecioUnitario($data->subTotal)
+            ->setMtoBaseIgv($data->valorVenta)
+            ->setPorcentajeIgv(18.0)
+            ->setIgv($data->mtoIGV)
+            ->setTipAfeIgv('10')
+            ->setTotalImpuestos($data->mtoIGV);
+
+        return (new Note)
+            ->setUblVersion('2.1')
+            ->setTipoDoc($data->tipoDoc)
+            ->setSerie($data->serie)
+            ->setCorrelativo($data->correlativo)
+            ->setFechaEmision($data->fechaEmision)
+            ->setTipoMoneda('PEN')
+            ->setCompany($company)
+            ->setClient($client)
+            ->setCodMotivo($data->codMotivo)
+            ->setDesMotivo($data->desMotivo)
+            ->setTipDocAfectado($data->tipDocAfectado)
+            ->setNumDocfectado($data->numDocAfectado)
+            ->setMtoOperGravadas($data->mtoOperGravadas)
+            ->setMtoIGV($data->mtoIGV)
+            ->setTotalImpuestos($data->mtoIGV)
+            ->setValorVenta($data->valorVenta)
+            ->setSubTotal($data->subTotal)
+            ->setMtoImpVenta($data->mtoImpVenta)
+            ->setDetails([$detail]);
     }
 
     private function buildDespatch(ShippingGuideData $data): Despatch

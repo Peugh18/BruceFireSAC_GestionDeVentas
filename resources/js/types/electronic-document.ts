@@ -1,3 +1,5 @@
+import { type CreditDebitNoteData } from './credit-debit-note';
+
 export type ElectronicDocumentTipo = 'factura' | 'boleta';
 export type ElectronicDocumentEstado = 'pendiente' | 'aceptado' | 'rechazado' | 'error';
 
@@ -17,4 +19,5 @@ export interface ElectronicDocumentData {
     fecha_envio: string | null;
     created_at: string;
     updated_at: string;
+    credit_debit_notes?: CreditDebitNoteData[];
 }
