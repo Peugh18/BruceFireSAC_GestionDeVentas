@@ -88,7 +88,7 @@ test('catalog listing combines type and search filters and retains pagination', 
         ->where('filters.search', 'Recarga')
         ->where('can.create', false)
         ->where('can.update', false)
-        ->where('auth.permissions', fn (array $permissions): bool => in_array('catalog.view', $permissions, true))
+        ->where('auth.permissions', fn ($permissions): bool => collect($permissions)->contains('catalog.view'))
         ->where('items.prev_page_url', fn (string $url): bool => str_contains($url, 'tipo=servicio') && str_contains($url, 'search=Recarga')));
 });
 
