@@ -3,7 +3,22 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { AlertTriangle, BookOpen, ClipboardList, FileBadge, FileText, LayoutGrid, Package, ShoppingBag, Truck, Users, Wallet, Wrench } from 'lucide-react';
+import {
+    AlertTriangle,
+    BarChart3,
+    BookOpen,
+    ClipboardList,
+    FileBadge,
+    FileText,
+    LayoutGrid,
+    Package,
+    Settings,
+    ShoppingBag,
+    Truck,
+    Users,
+    Wallet,
+    Wrench,
+} from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
@@ -63,6 +78,18 @@ export function AppSidebar() {
             : []),
         ...(auth.permissions.includes('collections.view')
             ? [{ title: 'Cobranzas', url: route('collections.index', {}, false), icon: Wallet }]
+            : []),
+        ...(auth.permissions.includes('reports.view')
+            ? [{ title: 'Reportes', url: route('reports.index', {}, false), icon: BarChart3 }]
+            : []),
+        ...(auth.permissions.includes('users.manage') || auth.permissions.includes('roles.manage')
+            ? [
+                  {
+                      title: 'Administración',
+                      url: route(auth.permissions.includes('users.manage') ? 'administration.users.index' : 'administration.roles.index', {}, false),
+                      icon: Settings,
+                  },
+              ]
             : []),
     ];
 

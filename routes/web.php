@@ -27,4 +27,6 @@ require __DIR__.'/deficiencies.php';
 require __DIR__.'/certificates.php';
 require __DIR__.'/pickups.php';
 require __DIR__.'/billing.php';
+require __DIR__.'/administration.php';
+require __DIR__.'/reports.php';
 require __DIR__.'/auth.php';
