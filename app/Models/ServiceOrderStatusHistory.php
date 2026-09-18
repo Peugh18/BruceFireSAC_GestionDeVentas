@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ServiceOrderStatusHistory extends Model
 {
     /** @var list<string> */
-    protected $fillable = ['estado_anterior', 'estado', 'user_id', 'observaciones'];
+    protected $fillable = ['service_order_id', 'estado_anterior', 'estado', 'user_id', 'observaciones'];
 
     /** @return BelongsTo<ServiceOrder, $this> */
     public function serviceOrder(): BelongsTo
