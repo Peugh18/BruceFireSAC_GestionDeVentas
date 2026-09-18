@@ -190,6 +190,13 @@ export default function ServiceOrdersShow({ order, transitions, statuses, servic
                                             {item.tipo_equipo}
                                             {item.capacidad ? ` · ${item.capacidad}` : ''}
                                         </p>
+                                        {auth.permissions.includes('checklists.view') && (
+                                            <Button asChild variant="outline" size="sm" className="mt-2 w-full text-xs">
+                                                <Link href={route('checklists.show', [order.id, item.id])}>
+                                                    Checklist técnico
+                                                </Link>
+                                            </Button>
+                                        )}
                                     </div>
                                 ))}
                             </CardContent>
