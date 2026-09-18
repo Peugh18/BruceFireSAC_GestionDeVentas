@@ -21,4 +21,7 @@ require __DIR__.'/equipment.php';
 require __DIR__.'/service-orders.php';
 require __DIR__.'/quotes.php';
 require __DIR__.'/sales.php';
+require __DIR__.'/collections.php';
+require __DIR__.'/checklists.php';
+require __DIR__.'/deficiencies.php';
 require __DIR__.'/auth.php';
