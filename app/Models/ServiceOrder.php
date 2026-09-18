@@ -145,6 +145,12 @@ class ServiceOrder extends Model
         return $this->hasMany(ServiceOrderStatusHistory::class);
     }
 
+    /** @return HasMany<ServiceOrderPickup, $this> */
+    public function pickups(): HasMany
+    {
+        return $this->hasMany(ServiceOrderPickup::class);
+    }
+
     /** @return list<string> */
     public function allowedTransitions(): array
     {

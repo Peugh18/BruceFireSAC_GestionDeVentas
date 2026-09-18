@@ -257,7 +257,21 @@ export default function ServiceOrdersShow({ order, transitions, statuses, servic
                             {serviceTypes[order.tipo_servicio]} · {order.client.razon_social}
                         </p>
                     </div>
-                    <Badge variant={order.estado === 'cerrado' ? 'secondary' : 'default'}>{statuses[order.estado]}</Badge>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {auth.permissions.includes('pickups.create') && (
+                            <Button asChild variant="outline" size="sm">
+                                <Link href={route('pickups.create', { service_order_id: order.id })}>
+                                    Registrar recojo
+                                </Link>
+                            </Button>
+                        )}
+                        <Button asChild variant="secondary" size="sm">
+                            <Link href={route('service-orders.acta.show', order.id)}>
+                                Acta de conformidad
+                            </Link>
+                        </Button>
+                        <Badge variant={order.estado === 'cerrado' ? 'secondary' : 'default'}>{statuses[order.estado]}</Badge>
+                    </div>
                 </div>
                 {status && (
                     <div role="status" className="bg-muted/50 rounded-lg border px-4 py-3 text-sm">
