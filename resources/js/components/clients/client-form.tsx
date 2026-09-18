@@ -96,8 +96,10 @@ export function ClientForm({
 
                 const checkAndSet = (key: keyof ClientFormData, val: string | null | undefined) => {
                     if (!val) return;
-                    const currentVal = data[key];
-                    if (!touchedFields[key] && (!currentVal || String(currentVal).trim() === '')) {
+                    // Only skip fields the user typed by hand; data left over from a
+                    // previous lookup (e.g. after switching tipo_documento) is fair
+                    // game to refresh with the new result.
+                    if (!touchedFields[key]) {
                         fieldsToUpdate[key] = val;
                     }
                 };
@@ -127,6 +129,35 @@ export function ClientForm({
         }
     };
 
+    const LOOKUP_FIELDS: (keyof ClientFormData)[] = [
+        'razon_social',
+        'nombre_comercial',
+        'direccion_fiscal',
+        'departamento',
+        'provincia',
+        'distrito',
+        'ubigeo',
+    ];
+
+    // Wipe out data left over from a previous lookup (e.g. a DNI only fills
+    // razon_social; switching to RUC should not leave a stale name sitting
+    // next to the new company's address, and vice versa) before requerying.
+    const clearUntouchedLookupFields = () => {
+        const cleared: Record<string, string> = {};
+        LOOKUP_FIELDS.forEach((key) => {
+            if (!touchedFields[key]) {
+                cleared[key] = '';
+            }
+        });
+        if (Object.keys(cleared).length > 0) {
+            if (setValues) {
+                setValues(cleared);
+            } else {
+                Object.entries(cleared).forEach(([k, v]) => setData(k as keyof ClientFormData, v));
+            }
+        }
+    };
+
     return (
         <form onSubmit={onSubmit} className="space-y-8">
             <div className="grid gap-6 sm:grid-cols-2">
@@ -137,6 +168,7 @@ export function ClientForm({
                         onValueChange={(value: TipoDocumento) => {
                             lastQueriedDoc.current = '';
                             setData('tipo_documento', value);
+                            clearUntouchedLookupFields();
                             const expectedLen = value === 'dni' ? 8 : value === 'ruc' ? 11 : 0;
                             if (expectedLen > 0 && data.numero_documento.trim().length === expectedLen) {
                                 triggerLookup(value, data.numero_documento);
