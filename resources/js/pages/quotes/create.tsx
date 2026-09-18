@@ -4,6 +4,7 @@ import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Combobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -107,6 +108,16 @@ export default function QuoteCreate({
         }
         setData('items', next);
     };
+
+    const catalogItemOptions = useMemo(
+        () =>
+            catalogItems.map((ci) => ({
+                value: String(ci.id),
+                label: ci.nombre,
+                description: `[${ci.codigo}] ${ci.categoria}`.trim(),
+            })),
+        [catalogItems],
+    );
 
     const totals = useMemo(() => {
         let subtotalSum = 0;
@@ -300,21 +311,14 @@ export default function QuoteCreate({
                                             return (
                                                 <TableRow key={index}>
                                                     <TableCell>
-                                                        <Select
+                                                        <Combobox
+                                                            options={catalogItemOptions}
                                                             value={String(item.catalog_item_id)}
                                                             onValueChange={(val) => updateItem(index, 'catalog_item_id', Number(val))}
-                                                        >
-                                                            <SelectTrigger>
-                                                                <SelectValue placeholder="Selecciona ítem" />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {catalogItems.map((ci) => (
-                                                                    <SelectItem key={ci.id} value={String(ci.id)}>
-                                                                        [{ci.codigo}] {ci.nombre}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
+                                                            placeholder="Buscar producto o servicio..."
+                                                            searchPlaceholder="Buscar por nombre o codigo..."
+                                                            emptyText="No se encontraron productos o servicios."
+                                                        />
                                                     </TableCell>
                                                     <TableCell>
                                                         <Input

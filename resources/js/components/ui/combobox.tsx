@@ -90,7 +90,7 @@ export function Combobox({
                                 {options.map((option) => (
                                     <CommandItem
                                         key={option.value}
-                                        value={option.value}
+                                        value={`${option.label} ${option.description ?? ''}`.trim()}
                                         onSelect={() => handleSelect(option)}
                                         className="cursor-pointer"
                                     >
