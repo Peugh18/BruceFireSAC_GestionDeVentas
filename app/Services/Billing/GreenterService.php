@@ -4,9 +4,17 @@ namespace App\Services\Billing;
 
 use App\Services\Billing\Data\SaleDocumentData;
 use App\Services\Billing\Data\SunatSendResult;
+use App\Services\Shipping\Data\ShippingGuideData;
 use Greenter\Model\Client\Client as GreenterClient;
 use Greenter\Model\Company\Address;
 use Greenter\Model\Company\Company;
+use Greenter\Model\Despatch\Despatch;
+use Greenter\Model\Despatch\DespatchDetail;
+use Greenter\Model\Despatch\Direction;
+use Greenter\Model\Despatch\Driver;
+use Greenter\Model\Despatch\Shipment;
+use Greenter\Model\Despatch\Transportist;
+use Greenter\Model\Despatch\Vehicle;
 use Greenter\Model\Response\BillResult;
 use Greenter\Model\Sale\Cuota;
 use Greenter\Model\Sale\FormaPagos\FormaPagoContado;
@@ -18,19 +26,22 @@ use Throwable;
 
 /**
  * The only class in the application allowed to know about Greenter. It
- * turns a neutral SaleDocumentData into Greenter's model classes, signs and
- * sends it to SUNAT, and translates the response back into a plain
- * SunatSendResult that the rest of the billing module can consume.
+ * turns neutral DTOs (SaleDocumentData for Factura/Boleta, ShippingGuideData
+ * for GRE) into Greenter's model classes, signs and sends them to SUNAT, and
+ * translates the response back into a plain SunatSendResult that the rest of
+ * the app can consume. GRE uses a different Greenter document (Despatch) and
+ * a different SUNAT endpoint than Invoice, but shares this same boundary.
  */
 class GreenterService
 {
-    private ?See $see = null;
+    /** @var array<string, See> */
+    private array $seeInstances = [];
 
     public function send(SaleDocumentData $data): SunatSendResult
     {
         try {
             $invoice = $this->buildInvoice($data);
-            $see = $this->see();
+            $see = $this->seeFor(config('billing.sunat.endpoint'));
 
             $result = $see->send($invoice);
             $xml = $see->getFactory()->getLastXml();
@@ -41,14 +52,29 @@ class GreenterService
         }
     }
 
-    private function see(): See
+    public function sendDespatch(ShippingGuideData $data): SunatSendResult
     {
-        if ($this->see !== null) {
-            return $this->see;
+        try {
+            $despatch = $this->buildDespatch($data);
+            $see = $this->seeFor(config('shipping.sunat.endpoint'));
+
+            $result = $see->send($despatch);
+            $xml = $see->getFactory()->getLastXml();
+
+            return $this->mapResult($result, $xml);
+        } catch (Throwable $e) {
+            return SunatSendResult::failed($e->getMessage());
+        }
+    }
+
+    private function seeFor(string $endpoint): See
+    {
+        if (isset($this->seeInstances[$endpoint])) {
+            return $this->seeInstances[$endpoint];
         }
 
         $see = new See;
-        $see->setService(config('billing.sunat.endpoint'));
+        $see->setService($endpoint);
         $see->setClaveSOL(
             config('billing.sunat.ruc'),
             config('billing.sunat.sol_user'),
@@ -60,12 +86,12 @@ class GreenterService
             $see->setCertificate(file_get_contents($certPath));
         }
 
-        return $this->see = $see;
+        return $this->seeInstances[$endpoint] = $see;
     }
 
-    private function buildInvoice(SaleDocumentData $data): Invoice
+    private function buildCompany(): Company
     {
-        $company = (new Company)
+        return (new Company)
             ->setRuc(config('billing.sunat.ruc'))
             ->setRazonSocial(config('billing.company.razon_social'))
             ->setNombreComercial(config('billing.company.nombre_comercial'))
@@ -77,6 +103,11 @@ class GreenterService
                     ->setDistrito(config('billing.company.distrito'))
                     ->setDireccion(config('billing.company.direccion'))
             );
+    }
+
+    private function buildInvoice(SaleDocumentData $data): Invoice
+    {
+        $company = $this->buildCompany();
 
         $client = (new GreenterClient)
             ->setTipoDoc($data->clientTipoDoc)
@@ -139,6 +170,67 @@ class GreenterService
         }
 
         return new FormaPagoContado;
+    }
+
+    private function buildDespatch(ShippingGuideData $data): Despatch
+    {
+        $company = $this->buildCompany();
+        $companyUbigeo = config('billing.company.ubigeo');
+
+        $destinatario = (new GreenterClient)
+            ->setTipoDoc($data->destinatarioTipoDoc)
+            ->setNumDoc($data->destinatarioNumDoc)
+            ->setRznSocial($data->destinatarioNombre);
+
+        $envio = (new Shipment)
+            ->setCodTraslado($data->motivoSunatCode)
+            ->setDesTraslado($data->motivoDescripcion)
+            ->setModTraslado($data->modalidad === 'transporte_publico' ? '01' : '02')
+            ->setFecTraslado($data->fechaInicio)
+            ->setPesoTotal($data->pesoTotal)
+            ->setUndPesoTotal('KGM')
+            // Beta simplification: origin/destination ubigeo default to the
+            // company's own ubigeo since the form only captures free-text
+            // addresses (§30 field list), not full ubigeo breakdowns.
+            ->setPartida(new Direction($companyUbigeo, $data->origen))
+            ->setLlegada(new Direction($companyUbigeo, $data->destino));
+
+        if ($data->modalidad === 'transporte_publico') {
+            $envio->setTransportista(
+                (new Transportist)
+                    ->setTipoDoc('6')
+                    ->setNumDoc($data->transportistaRuc)
+                    ->setRznSocial($data->transportistaRazonSocial)
+            );
+        } else {
+            $envio->setVehiculo((new Vehicle)->setPlaca($data->vehiculoPlaca));
+            $envio->setChoferes([
+                (new Driver)
+                    ->setTipo('Principal')
+                    ->setNombres($data->conductorNombre)
+                    ->setLicencia($data->conductorLicencia),
+            ]);
+        }
+
+        $details = array_map(function ($item) {
+            return (new DespatchDetail)
+                ->setCodigo($item->codigo)
+                ->setDescripcion($item->descripcion)
+                ->setUnidad($item->unidad)
+                ->setCantidad($item->cantidad);
+        }, $data->items);
+
+        return (new Despatch)
+            ->setVersion('2022')
+            ->setTipoDoc('09')
+            ->setSerie($data->serie)
+            ->setCorrelativo($data->correlativo)
+            ->setFechaEmision($data->fechaEmision)
+            ->setCompany($company)
+            ->setDestinatario($destinatario)
+            ->setEnvio($envio)
+            ->setDetails($details)
+            ->setObservacion($data->observacion);
     }
 
     private function mapResult(?BillResult $result, ?string $xml): SunatSendResult

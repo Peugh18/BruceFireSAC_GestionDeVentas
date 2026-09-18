@@ -12,6 +12,7 @@ import {
     FileText,
     LayoutGrid,
     Package,
+    Route as RouteIcon,
     Settings,
     ShoppingBag,
     Truck,
@@ -81,6 +82,9 @@ export function AppSidebar() {
             : []),
         ...(auth.permissions.includes('reports.view')
             ? [{ title: 'Reportes', url: route('reports.index', {}, false), icon: BarChart3 }]
+            : []),
+        ...(auth.permissions.includes('shipping_guides.view')
+            ? [{ title: 'Guías de Remisión', url: route('shipping.index', {}, false), icon: RouteIcon }]
             : []),
         ...(auth.permissions.includes('users.manage') || auth.permissions.includes('roles.manage')
             ? [
