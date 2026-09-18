@@ -28,5 +28,6 @@ require __DIR__.'/billing.php';
 require __DIR__.'/shipping.php';
 require __DIR__.'/administration.php';
 require __DIR__.'/reports.php';
+require __DIR__.'/ai-assistant.php';
 require __DIR__.'/notifications.php';
 require __DIR__.'/auth.php';

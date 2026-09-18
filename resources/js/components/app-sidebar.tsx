@@ -7,6 +7,7 @@ import {
     AlertTriangle,
     BarChart3,
     BookOpen,
+    Bot,
     ClipboardList,
     FileBadge,
     FileText,
@@ -82,6 +83,9 @@ export function AppSidebar() {
             : []),
         ...(auth.permissions.includes('reports.view')
             ? [{ title: 'Reportes', url: route('reports.index', {}, false), icon: BarChart3 }]
+            : []),
+        ...(auth.permissions.includes('reports.view')
+            ? [{ title: 'Asistente Gerencial', url: route('ai-assistant.index', {}, false), icon: Bot }]
             : []),
         ...(auth.permissions.includes('shipping_guides.view')
             ? [{ title: 'Guías de Remisión', url: route('shipping.index', {}, false), icon: RouteIcon }]

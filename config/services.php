@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'gemini' => [
+        'key' => env('GEMINI_API_KEY'),
+        // gemini-2.0-flash was shut down; gemini-3.8-flash is the current
+        // stable flash model per https://ai.google.dev/gemini-api/docs/models
+        'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
+        'endpoint' => env('GEMINI_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta/models'),
+    ],
+
 ];
