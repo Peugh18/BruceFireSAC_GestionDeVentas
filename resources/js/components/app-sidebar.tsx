@@ -68,7 +68,7 @@ export function AppSidebar() {
             ? [{ title: 'Órdenes de Servicio', url: route('service-orders.index', {}, false), icon: ClipboardList }]
             : []),
         ...(auth.permissions.includes('pickups.view')
-            ? [{ title: 'Recojos y Custodia', url: route('pickups.index', {}, false), icon: Truck }]
+            ? [{ title: 'Recojos', url: route('pickups.index', {}, false), icon: Truck }]
             : []),
         ...(auth.permissions.includes('deficiencies.view')
             ? [{ title: 'Deficiencias', url: route('deficiencies.index', {}, false), icon: AlertTriangle }]
