@@ -12,11 +12,18 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class ServiceOrder extends Model
 {
     /** @use HasFactory<ServiceOrderFactory> */
-    use HasFactory;
+    use HasFactory, LogsActivity;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()->logOnly(['estado'])->logOnlyDirty();
+    }
 
     public const STATUS_LABELS = [
         'pendiente_recepcion' => 'Pendiente de recepción',

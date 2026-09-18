@@ -127,7 +127,7 @@ export default function QuoteShow({ quote, status }: { quote: Quote; status?: st
 
                 {status && (
                     <div role="status" className="rounded-lg border bg-muted/50 px-4 py-3 text-sm text-foreground flex items-center gap-2">
-                        <CheckCircle2 className="size-4 text-emerald-600" />
+                        <CheckCircle2 className="size-4 text-success" />
                         {status}
                     </div>
                 )}
