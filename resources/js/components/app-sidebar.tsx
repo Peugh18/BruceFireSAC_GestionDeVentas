@@ -3,7 +3,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, ClipboardList, LayoutGrid, Package, Users, Wrench } from 'lucide-react';
+import { BookOpen, ClipboardList, FileText, LayoutGrid, Package, ShoppingBag, Users, Wrench } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
@@ -43,6 +43,12 @@ export function AppSidebar() {
               ]
             : []),
         ...(auth.permissions.includes('inventory.view') ? [{ title: 'Inventario', url: route('inventory.index', {}, false), icon: Package }] : []),
+        ...(auth.permissions.includes('quotes.view')
+            ? [{ title: 'Cotizaciones', url: route('quotes.index', {}, false), icon: FileText }]
+            : []),
+        ...(auth.permissions.includes('sales.view')
+            ? [{ title: 'Ventas', url: route('sales.index', {}, false), icon: ShoppingBag }]
+            : []),
         ...(auth.permissions.includes('service_orders.view')
             ? [{ title: 'Órdenes de Servicio', url: route('service-orders.index', {}, false), icon: ClipboardList }]
             : []),
