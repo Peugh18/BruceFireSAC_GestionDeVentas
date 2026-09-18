@@ -1,14 +1,26 @@
+import { UnitSelector, type SaleInventoryUnit } from '@/components/inventory/unit-selector';
 import HeadingSmall from '@/components/heading-small';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { type Quote, type QuoteEstado } from '@/types/quote';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { ArrowLeft, CheckCircle2, ChevronDown, Copy, Edit, ShoppingBag } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronDown, Copy, Edit, Loader2, ShoppingBag } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 const ESTADO_BADGE_VARIANT: Record<QuoteEstado, 'default' | 'secondary' | 'destructive' | 'outline'> = {
     borrador: 'outline',
@@ -51,6 +63,17 @@ export default function QuoteShow({ quote, status }: { quote: Quote; status?: st
     const canEdit = canUpdate && ['borrador', 'emitida'].includes(quote.estado);
     const canBeConverted = canConvert && ['borrador', 'emitida', 'enviada', 'aceptada'].includes(quote.estado) && !quote.sale;
 
+    const [convertDialogOpen, setConvertDialogOpen] = useState(false);
+    const suggestedTipo = quote.client?.tipo_documento === 'ruc' ? 'factura' : 'boleta';
+    const [tipoComprobante, setTipoComprobante] = useState<'boleta' | 'factura'>(suggestedTipo);
+    const [selectedUnits, setSelectedUnits] = useState<Record<number, SaleInventoryUnit | null>>({});
+    const [convertErrors, setConvertErrors] = useState<Record<string, string>>({});
+    const [isConverting, setIsConverting] = useState(false);
+
+    const serializedItems = useMemo(() => {
+        return (quote.items ?? []).filter((item) => Boolean(item.catalog_item?.control_serializado));
+    }, [quote.items]);
+
     const changeStatus = (nextEstado: string) => {
         router.patch(route('quotes.status', quote.id), { estado: nextEstado });
     };
@@ -59,10 +82,57 @@ export default function QuoteShow({ quote, status }: { quote: Quote; status?: st
         router.post(route('quotes.duplicate', quote.id));
     };
 
-    const convertToSale = () => {
-        if (confirm('¿Deseas convertir esta cotización en una venta oficial?')) {
-            router.post(route('quotes.convert', quote.id));
+    const openConvertDialog = () => {
+        setTipoComprobante(quote.client?.tipo_documento === 'ruc' ? 'factura' : 'boleta');
+        setSelectedUnits({});
+        setConvertErrors({});
+        setConvertDialogOpen(true);
+    };
+
+    const handleConvertConfirm = () => {
+        const newErrors: Record<string, string> = {};
+        if (tipoComprobante === 'factura' && quote.client?.tipo_documento !== 'ruc') {
+            newErrors.tipo_comprobante = 'Una factura requiere RUC. Selecciona Boleta o actualiza el documento del cliente.';
         }
+
+        serializedItems.forEach((item) => {
+            const unit = selectedUnits[item.id ?? 0];
+            if (!unit) {
+                newErrors[`items.${item.id}.inventory_unit_id`] = `Debes seleccionar la unidad física para "${item.catalog_item?.nombre}".`;
+            }
+        });
+
+        if (Object.keys(newErrors).length > 0) {
+            setConvertErrors(newErrors);
+            return;
+        }
+
+        setIsConverting(true);
+        setConvertErrors({});
+
+        const itemsPayload = serializedItems.map((item) => ({
+            quote_item_id: item.id,
+            inventory_unit_id: selectedUnits[item.id ?? 0]?.id ?? null,
+        }));
+
+        router.post(
+            route('quotes.convert', quote.id),
+            {
+                tipo_comprobante: tipoComprobante,
+                items: itemsPayload,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setConvertDialogOpen(false);
+                    setIsConverting(false);
+                },
+                onError: (errs) => {
+                    setConvertErrors(errs);
+                    setIsConverting(false);
+                },
+            }
+        );
     };
 
     return (
@@ -118,7 +188,7 @@ export default function QuoteShow({ quote, status }: { quote: Quote; status?: st
                         )}
 
                         {canBeConverted && (
-                            <Button onClick={convertToSale} size="sm">
+                            <Button onClick={openConvertDialog} size="sm">
                                 <ShoppingBag className="size-4 mr-1" /> Convertir a venta
                             </Button>
                         )}
@@ -243,6 +313,115 @@ export default function QuoteShow({ quote, status }: { quote: Quote; status?: st
                         </Table>
                     </CardContent>
                 </Card>
+
+                <Dialog open={convertDialogOpen} onOpenChange={setConvertDialogOpen}>
+                    <DialogContent className="sm:max-w-lg">
+                        <DialogHeader>
+                            <DialogTitle>Convertir Cotización a Venta</DialogTitle>
+                            <DialogDescription>
+                                Configura el comprobante y asigna las unidades físicas disponibles para registrar la venta oficial.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-4 py-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="convert_tipo_comprobante">Tipo de Comprobante *</Label>
+                                <Select
+                                    value={tipoComprobante}
+                                    onValueChange={(val: 'boleta' | 'factura') => {
+                                        setTipoComprobante(val);
+                                        if (convertErrors.tipo_comprobante) {
+                                            setConvertErrors((prev) => {
+                                                const next = { ...prev };
+                                                delete next.tipo_comprobante;
+                                                return next;
+                                            });
+                                        }
+                                    }}
+                                >
+                                    <SelectTrigger id="convert_tipo_comprobante">
+                                        <SelectValue placeholder="Selecciona tipo de comprobante" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="boleta">Boleta</SelectItem>
+                                        <SelectItem value="factura">Factura</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                {tipoComprobante === 'factura' && quote.client && quote.client.tipo_documento !== 'ruc' && (
+                                    <p className="text-xs text-destructive">
+                                        Una factura requiere RUC. El cliente tiene documento tipo {quote.client.tipo_documento.toUpperCase()}.
+                                    </p>
+                                )}
+                                {convertErrors.tipo_comprobante && (
+                                    <p className="text-xs text-destructive">{convertErrors.tipo_comprobante}</p>
+                                )}
+                            </div>
+
+                            {serializedItems.length > 0 && (
+                                <div className="space-y-3 pt-2">
+                                    <div className="border-t pt-3">
+                                        <Label className="text-sm font-semibold">Unidades Físicas Serializadas</Label>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                            Asigna la unidad física disponible para cada ítem serializado que se descontará de inventario.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1">
+                                        {serializedItems.map((item) => {
+                                            const itemKey = `items.${item.id}.inventory_unit_id`;
+                                            const itemError = convertErrors[itemKey];
+
+                                            return (
+                                                <div key={item.id} className="rounded-md border bg-muted/20 p-3 space-y-2">
+                                                    <div className="flex items-center justify-between text-xs">
+                                                        <span className="font-semibold text-foreground">{item.catalog_item?.nombre}</span>
+                                                        <span className="font-mono text-muted-foreground">[{item.catalog_item?.codigo}]</span>
+                                                    </div>
+                                                    <UnitSelector
+                                                        catalogItemId={item.catalog_item_id}
+                                                        selectedUnitId={selectedUnits[item.id ?? 0]?.id ?? null}
+                                                        selectedUnit={selectedUnits[item.id ?? 0]}
+                                                        onSelectUnit={(unit) => {
+                                                            setSelectedUnits((prev) => ({ ...prev, [item.id ?? 0]: unit }));
+                                                            if (convertErrors[itemKey]) {
+                                                                setConvertErrors((prev) => {
+                                                                    const next = { ...prev };
+                                                                    delete next[itemKey];
+                                                                    return next;
+                                                                });
+                                                            }
+                                                        }}
+                                                        error={itemError}
+                                                        disabled={isConverting}
+                                                    />
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <DialogFooter className="gap-2 sm:gap-0">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setConvertDialogOpen(false)}
+                                disabled={isConverting}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                type="button"
+                                onClick={handleConvertConfirm}
+                                disabled={isConverting}
+                            >
+                                {isConverting && <Loader2 className="mr-2 size-4 animate-spin" />}
+                                Confirmar y Generar Venta
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </AppLayout>
     );

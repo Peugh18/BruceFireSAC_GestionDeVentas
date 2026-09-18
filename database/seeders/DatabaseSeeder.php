@@ -29,5 +29,9 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $user->assignRole('Gerente');
+
+        if (app()->environment('local')) {
+            $this->call(DemoDataSeeder::class);
+        }
     }
 }

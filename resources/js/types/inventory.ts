@@ -19,6 +19,7 @@ export interface InventoryStock {
 
 export interface InventoryUnit {
     id: number;
+    catalog_item_id: number;
     serie: string;
     marca: string;
     capacidad: string;
@@ -27,6 +28,7 @@ export interface InventoryUnit {
     estado: 'disponible' | 'vendido' | 'reservado';
     conforme: boolean;
     en_stock: boolean;
+    catalog_item?: CatalogItem;
 }
 
 export interface InventoryMovement {

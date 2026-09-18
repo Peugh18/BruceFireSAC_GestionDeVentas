@@ -5,16 +5,26 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreQuoteRequest;
 use App\Http\Requests\UpdateQuoteRequest;
 use App\Models\CatalogItem;
+use App\Models\InventoryUnit;
 use App\Models\Quote;
 use App\Models\Sale;
+use App\Services\Billing\BillingService;
+use App\Services\Sales\SaleItemProcessor;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class QuoteController extends Controller
 {
+    public function __construct(
+        private readonly BillingService $billingService,
+        private readonly SaleItemProcessor $saleItemProcessor,
+    ) {}
+
     /**
      * Display a listing of quotes.
      */
@@ -286,9 +296,84 @@ class QuoteController extends Controller
     {
         $this->authorize('convert', $quote);
 
-        $quote->load(['items.catalogItem']);
+        $validated = $request->validate([
+            'tipo_comprobante' => ['required', Rule::in(['boleta', 'factura'])],
+            'items' => ['nullable', 'array'],
+            'items.*.quote_item_id' => ['nullable', 'integer'],
+            'items.*.inventory_unit_id' => ['nullable', 'integer', 'exists:inventory_units,id'],
+        ]);
 
-        $sale = DB::transaction(function () use ($quote, $request) {
+        $quote->loadMissing(['client', 'items.catalogItem']);
+
+        $tipoComprobante = $validated['tipo_comprobante'];
+        if ($tipoComprobante === 'factura' && $quote->client?->tipo_documento !== 'ruc') {
+            throw ValidationException::withMessages([
+                'tipo_comprobante' => 'Para emitir una factura, el cliente debe tener tipo de documento RUC.',
+            ]);
+        }
+
+        $itemsInput = $request->input('items', []);
+        $unitMap = collect($itemsInput)->mapWithKeys(function ($item, $key) {
+            if (is_array($item)) {
+                $quoteItemId = $item['quote_item_id'] ?? $key;
+
+                return [(int) $quoteItemId => ! empty($item['inventory_unit_id']) ? (int) $item['inventory_unit_id'] : null];
+            }
+
+            return [(int) $key => ! empty($item) ? (int) $item : null];
+        });
+
+        if ($request->has('units') && is_array($request->input('units'))) {
+            foreach ($request->input('units') as $qId => $uId) {
+                if (! empty($uId)) {
+                    $unitMap->put((int) $qId, (int) $uId);
+                }
+            }
+        }
+
+        $unitErrors = [];
+        $unitIds = [];
+
+        foreach ($quote->items as $item) {
+            $catalogItem = $item->catalogItem;
+            if (! $catalogItem?->control_serializado) {
+                continue;
+            }
+
+            $unitId = $unitMap->get($item->id);
+
+            if (empty($unitId)) {
+                $unitErrors["items.{$item->id}.inventory_unit_id"] = "Selecciona la unidad física disponible para '{$catalogItem->nombre}'.";
+
+                continue;
+            }
+
+            if (in_array($unitId, $unitIds, true)) {
+                $unitErrors["items.{$item->id}.inventory_unit_id"] = 'Esta unidad física ya fue asignada a otro ítem.';
+
+                continue;
+            }
+
+            $unitIds[] = $unitId;
+
+            $available = InventoryUnit::query()
+                ->whereKey($unitId)
+                ->where('catalog_item_id', $catalogItem->id)
+                ->where('en_stock', true)
+                ->where('conforme', true)
+                ->where('estado', 'disponible')
+                ->exists();
+
+            if (! $available) {
+                $unitErrors["items.{$item->id}.inventory_unit_id"] = "La unidad seleccionada para '{$catalogItem->nombre}' no está disponible para venta.";
+            }
+        }
+
+        if (! empty($unitErrors)) {
+            throw ValidationException::withMessages($unitErrors);
+        }
+
+        $sale = DB::transaction(function () use ($quote, $request, $unitMap, $tipoComprobante) {
             $sale = Sale::create([
                 'quote_id' => $quote->id,
                 'client_id' => $quote->client_id,
@@ -304,23 +389,23 @@ class QuoteController extends Controller
                 'observaciones' => $quote->observaciones,
             ]);
 
+            $itemsData = [];
             foreach ($quote->items as $item) {
-                $sale->items()->create([
+                $itemsData[] = [
                     'catalog_item_id' => $item->catalog_item_id,
+                    'inventory_unit_id' => $unitMap->get($item->id),
                     'cantidad' => $item->cantidad,
                     'precio_unitario' => $item->precio_unitario,
                     'descuento' => $item->descuento,
                     'subtotal' => $item->subtotal,
-                ]);
-
-                // Hook: si el item tiene control_serializado = true, el vendedor posteriormente
-                // escanea los barcode exactos de las unidades físicas para vincularlas.
-                if ($item->catalogItem?->control_serializado) {
-                    // Hook para escaneo de unidades serializadas
-                }
+                ];
             }
 
+            $this->saleItemProcessor->process($sale, $itemsData, $request->user());
+
             $quote->update(['estado' => 'convertida']);
+
+            $this->billingService->issue($sale, $tipoComprobante);
 
             return $sale;
         });

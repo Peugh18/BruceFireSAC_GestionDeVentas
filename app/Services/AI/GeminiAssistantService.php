@@ -21,11 +21,11 @@ class GeminiAssistantService
 
     public function ask(User $user, string $question): string
     {
-        // Aggregate, business-wide figures are gated behind reports.view,
-        // same boundary the Reports module itself uses. Without it, the
+        // Aggregate, business-wide figures are gated behind ai_assistant.view,
+        // same boundary as the assistant route. Without it, the
         // assistant has nothing safe to summarize.
-        if (! $user->can('reports.view')) {
-            return 'No tienes permiso para consultar datos agregados del negocio (se requiere el permiso de reportes).';
+        if (! $user->can('ai_assistant.view')) {
+            return 'No tienes permiso para consultar datos agregados del negocio (se requiere el permiso del asistente gerencial).';
         }
 
         $context = $this->buildContext();

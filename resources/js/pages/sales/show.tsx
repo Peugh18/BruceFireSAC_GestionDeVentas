@@ -202,17 +202,11 @@ function BillingCard({
     noteMotivoLabels: Record<string, Record<string, string>>;
 }) {
     const { auth } = usePage<SharedData>().props;
-    const canIssue = auth.permissions.includes('billing.issue');
     const canRetry = auth.permissions.includes('billing.retry');
     const canCreateNote = auth.permissions.includes('billing.credit_note');
     const [noteDialogOpen, setNoteDialogOpen] = useState(false);
 
-    const issueForm = useForm({});
     const retryForm = useForm({});
-
-    const issue = () => {
-        issueForm.post(route('billing.issue', sale.id), { preserveScroll: true });
-    };
 
     const retry = () => {
         if (!electronicDocument) return;
@@ -237,13 +231,7 @@ function BillingCard({
                         </span>{' '}
                         segun el tipo de documento del cliente.
                     </p>
-                    {canIssue ? (
-                        <Button onClick={issue} disabled={issueForm.processing} className="w-full">
-                            {issueForm.processing ? 'Enviando a cola...' : 'Emitir comprobante'}
-                        </Button>
-                    ) : (
-                        <p className="text-xs text-muted-foreground">No tienes permiso para emitir comprobantes.</p>
-                    )}
+                    <p className="text-xs text-muted-foreground">El comprobante se emite automaticamente al registrar la venta.</p>
                 </CardContent>
             </Card>
         );
@@ -441,6 +429,11 @@ export default function SaleShow({
                             </div>
                         </div>
                     </div>
+                    {sale.condicion_pago === 'credito' && (
+                        <Button variant="outline" asChild>
+                            <Link href={route('collections.show', sale.id)}>Ver cobranza</Link>
+                        </Button>
+                    )}
                 </div>
 
                 {status && (

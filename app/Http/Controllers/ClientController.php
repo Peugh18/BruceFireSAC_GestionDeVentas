@@ -60,9 +60,13 @@ class ClientController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(ClientStoreRequest $request): RedirectResponse
+    public function store(ClientStoreRequest $request): RedirectResponse|JsonResponse
     {
         $client = Client::create($request->validated());
+
+        if ($request->wantsJson()) {
+            return response()->json($client->load(['sites', 'vehicles']), 201);
+        }
 
         return to_route('clients.show', $client)->with('status', 'Cliente creado correctamente.');
     }

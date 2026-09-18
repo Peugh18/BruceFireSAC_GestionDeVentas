@@ -1,3 +1,4 @@
+import { CatalogInventoryTabs } from '@/components/catalog-inventory-tabs';
 import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import InventoryField from '@/components/inventory-field';
@@ -13,12 +14,12 @@ import { type FormEventHandler } from 'react';
 type UnitInput = { serie: string; marca: string; capacidad: string; anio: string; barcode: string; conforme: boolean };
 type Item = { id: number; codigo: string; nombre: string; unidad: string; control_serializado: boolean };
 
-export default function Receive({ items, today }: { items: Item[]; today: string }) {
+export default function Receive({ items, today, defaultCatalogItemId }: { items: Item[]; today: string; defaultCatalogItemId?: number | null }) {
     const form = useForm({
         proveedor: '',
         documento_referencia: '',
         fecha: today,
-        catalog_item_id: '',
+        catalog_item_id: defaultCatalogItemId ? String(defaultCatalogItemId) : '',
         cantidad: '',
         cantidad_conforme: '',
         cantidad_observada: '0',
@@ -45,6 +46,7 @@ export default function Receive({ items, today }: { items: Item[]; today: string
     return (
         <AppLayout
             breadcrumbs={[
+                { title: 'Catálogo', href: route('catalog.index') },
                 { title: 'Inventario', href: route('inventory.index') },
                 { title: 'Recepción de proveedor', href: route('inventory.receive') },
             ]}
@@ -55,6 +57,7 @@ export default function Receive({ items, today }: { items: Item[]; today: string
                     title="Recepción de proveedor"
                     description="Registra lo recibido y su conformidad. Solo las cantidades conformes aumentan el stock."
                 />
+                <CatalogInventoryTabs active="inventory" />
                 {items.length === 0 && (
                     <div role="status" className="bg-muted/50 rounded-lg border p-4 text-sm">
                         No hay artículos activos con control de stock habilitado en el catálogo.

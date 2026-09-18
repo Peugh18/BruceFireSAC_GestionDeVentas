@@ -20,6 +20,7 @@ class SaleItem extends Model
     protected $fillable = [
         'sale_id',
         'catalog_item_id',
+        'inventory_unit_id',
         'cantidad',
         'precio_unitario',
         'descuento',
@@ -55,5 +56,13 @@ class SaleItem extends Model
     public function catalogItem(): BelongsTo
     {
         return $this->belongsTo(CatalogItem::class);
+    }
+
+    /**
+     * @return BelongsTo<InventoryUnit, $this>
+     */
+    public function inventoryUnit(): BelongsTo
+    {
+        return $this->belongsTo(InventoryUnit::class);
     }
 }

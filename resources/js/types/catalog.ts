@@ -24,4 +24,10 @@ export interface CatalogItem {
     requiere_orden: boolean;
     requiere_certificado: boolean;
     checklist_aplicable: string | null;
+    inventory_stock?: {
+        id: number;
+        catalog_item_id: number;
+        stock_actual: string;
+        stock_minimo: string;
+    } | null;
 }

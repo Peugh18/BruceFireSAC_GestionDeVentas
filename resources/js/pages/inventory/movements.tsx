@@ -1,3 +1,4 @@
+import { CatalogInventoryTabs } from '@/components/catalog-inventory-tabs';
 import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import InventoryField from '@/components/inventory-field';
@@ -47,6 +48,7 @@ export default function Movements({
     return (
         <AppLayout
             breadcrumbs={[
+                { title: 'Catálogo', href: route('catalog.index') },
                 { title: 'Inventario', href: route('inventory.index') },
                 { title: 'Movimientos', href: route('inventory.movements') },
             ]}
@@ -54,6 +56,7 @@ export default function Movements({
             <Head title="Movimientos de inventario" />
             <div className="space-y-6 p-4 md:p-6">
                 <HeadingSmall title="Movimientos de inventario" description="Consulta entradas, salidas y ajustes con su responsable y referencia." />
+                <CatalogInventoryTabs active="inventory" />
                 <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                     <div className="lg:col-span-2">
                         <InventoryField

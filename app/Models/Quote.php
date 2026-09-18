@@ -50,8 +50,8 @@ class Quote extends Model
     protected function casts(): array
     {
         return [
-            'fecha' => 'date',
-            'vigencia' => 'date',
+            'fecha' => 'date:Y-m-d',
+            'vigencia' => 'date:Y-m-d',
             'subtotal' => 'decimal:2',
             'igv' => 'decimal:2',
             'total' => 'decimal:2',

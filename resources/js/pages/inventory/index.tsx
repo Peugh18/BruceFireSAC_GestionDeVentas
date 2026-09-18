@@ -1,8 +1,9 @@
+import { CatalogInventoryTabs } from '@/components/catalog-inventory-tabs';
 import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import InventoryField from '@/components/inventory-field';
 import InventoryPagination from '@/components/inventory-pagination';
-import { Badge } from '@/components/ui/badge';
+import { InventoryStockBadge } from '@/components/inventory-stock-badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -26,15 +27,13 @@ export default function Index({ stocks, filters, lowStockCount, can, status }: P
         event.preventDefault();
         form.get(route('inventory.index'), { preserveState: false, preserveScroll: true });
     };
-    const stockBadge = (stock: InventoryStock) =>
-        Number(stock.stock_actual) < Number(stock.stock_minimo) ? (
-            <Badge variant="destructive">Bajo el mínimo</Badge>
-        ) : (
-            <Badge variant="secondary">{Number(stock.stock_actual) === 0 ? 'Sin existencias' : 'Stock suficiente'}</Badge>
-        );
-
     return (
-        <AppLayout breadcrumbs={[{ title: 'Inventario', href: route('inventory.index') }]}>
+        <AppLayout
+            breadcrumbs={[
+                { title: 'Catálogo', href: route('catalog.index') },
+                { title: 'Inventario', href: route('inventory.index') },
+            ]}
+        >
             <Head title="Inventario" />
             <div className="space-y-6 p-4 md:p-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
@@ -56,6 +55,7 @@ export default function Index({ stocks, filters, lowStockCount, can, status }: P
                         )}
                     </div>
                 </div>
+                <CatalogInventoryTabs active="inventory" />
                 {status && (
                     <div role="status" className="bg-muted/50 rounded-lg border px-4 py-3 text-sm">
                         {status}
@@ -136,7 +136,9 @@ export default function Index({ stocks, filters, lowStockCount, can, status }: P
                                                 {quantity(stock.stock_actual)} {stock.catalog_item.unidad}
                                             </td>
                                             <td className="px-4 py-4 tabular-nums">{quantity(stock.stock_minimo)}</td>
-                                            <td className="px-4 py-4">{stockBadge(stock)}</td>
+                                            <td className="px-4 py-4">
+                                                <InventoryStockBadge stockActual={stock.stock_actual} stockMinimo={stock.stock_minimo} />
+                                            </td>
                                             <td className="px-4 py-4">
                                                 <Button variant="ghost" size="sm" asChild>
                                                     <Link href={route('inventory.show', stock.id)}>Ver detalle</Link>
@@ -152,7 +154,7 @@ export default function Index({ stocks, filters, lowStockCount, can, status }: P
                                 <article key={stock.id} className="space-y-3 rounded-xl border p-4">
                                     <div className="flex flex-wrap items-start justify-between gap-3">
                                         <h2 className="font-medium">{stock.catalog_item.nombre}</h2>
-                                        {stockBadge(stock)}
+                                        <InventoryStockBadge stockActual={stock.stock_actual} stockMinimo={stock.stock_minimo} />
                                     </div>
                                     <p className="text-muted-foreground font-mono text-xs">{stock.catalog_item.codigo}</p>
                                     <p className="text-sm">

@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 interface ClientSearchComboboxProps {
     value: string | number;
     onSelect: (client: Client) => void;
+    selectedClient?: Client | null;
     disabled?: boolean;
     placeholder?: string;
     id?: string;
@@ -19,7 +20,14 @@ interface ClientSearchComboboxProps {
  * object (including sites and vehicles) so the parent can populate dependent
  * fields immediately without an additional round-trip.
  */
-export function ClientSearchCombobox({ value, onSelect, disabled = false, placeholder = 'Buscar cliente...', id }: ClientSearchComboboxProps) {
+export function ClientSearchCombobox({
+    value,
+    onSelect,
+    selectedClient = null,
+    disabled = false,
+    placeholder = 'Buscar cliente...',
+    id,
+}: ClientSearchComboboxProps) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<Client[]>([]);
@@ -71,6 +79,12 @@ export function ClientSearchCombobox({ value, onSelect, disabled = false, placeh
             setSelectedLabel('');
         }
     }, [value]);
+
+    useEffect(() => {
+        if (selectedClient) {
+            setSelectedLabel(`${selectedClient.razon_social} (${selectedClient.numero_documento})`);
+        }
+    }, [selectedClient]);
 
     return (
         <Popover open={open} onOpenChange={setOpen}>

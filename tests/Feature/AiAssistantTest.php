@@ -3,10 +3,12 @@
 use App\Models\Sale;
 use App\Models\User;
 use App\Services\AI\GeminiAssistantService;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Http;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
-function assistantUser(array $permissions = ['reports.view']): User
+function assistantUser(array $permissions = ['ai_assistant.view']): User
 {
     foreach ($permissions as $permission) {
         Permission::findOrCreate($permission, 'web');
@@ -23,13 +25,30 @@ test('ai assistant routes redirect guests to login', function () {
     $this->post(route('ai-assistant.ask'), ['question' => 'hola'])->assertRedirect(route('login'));
 });
 
-test('user without reports.view is forbidden', function () {
+test('user without ai assistant permission is forbidden', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)->get(route('ai-assistant.index'))->assertForbidden();
     $this->actingAs($user)
         ->post(route('ai-assistant.ask'), ['question' => '¿Cuanto vendimos?'])
         ->assertForbidden();
+});
+
+test('reports permission alone does not grant ai assistant access', function () {
+    $user = assistantUser(['reports.view']);
+
+    $this->actingAs($user)->get(route('ai-assistant.index'))->assertForbidden();
+    $this->actingAs($user)
+        ->post(route('ai-assistant.ask'), ['question' => '¿Cuanto vendimos?'])
+        ->assertForbidden();
+});
+
+test('base roles grant ai assistant permission only to manager', function () {
+    $this->seed(RolesAndPermissionsSeeder::class);
+
+    expect(Role::findByName('Gerente')->hasPermissionTo('ai_assistant.view'))->toBeTrue();
+    expect(Role::findByName('Vendedor')->hasPermissionTo('ai_assistant.view'))->toBeFalse();
+    expect(Role::findByName('Almacén')->hasPermissionTo('ai_assistant.view'))->toBeFalse();
 });
 
 test('asking a question sends a bounded context to gemini and returns the answer', function () {
@@ -75,7 +94,7 @@ test('question is required', function () {
         ->assertSessionHasErrors('question');
 });
 
-test('service refuses to build context or call gemini for a user without reports.view', function () {
+test('service refuses to build context or call gemini for a user without ai assistant permission', function () {
     Http::fake();
 
     $user = User::factory()->create();

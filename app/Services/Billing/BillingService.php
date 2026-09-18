@@ -26,12 +26,12 @@ class BillingService
      * submission to SUNAT. The actual send happens on the queue, never
      * synchronously within the request.
      */
-    public function issue(Sale $sale): ElectronicDocument
+    public function issue(Sale $sale, ?string $tipo = null): ElectronicDocument
     {
         $document = ElectronicDocument::firstOrNew(['sale_id' => $sale->id]);
 
         if (! $document->exists) {
-            $tipo = self::resolveTipo($sale->client);
+            $tipo = $tipo ?? self::resolveTipo($sale->client);
             $serie = config("billing.series.{$tipo}");
 
             $document->fill([

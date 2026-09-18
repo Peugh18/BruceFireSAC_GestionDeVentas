@@ -1,4 +1,5 @@
 import { ClientSearchCombobox } from '@/components/client-search-combobox';
+import { InlineClientDialog } from '@/components/clients/inline-client-dialog';
 import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
@@ -145,12 +146,26 @@ export default function QuoteCreate({
                         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                             <div className="space-y-2">
                                 <Label htmlFor="client_id">Cliente *</Label>
-                                <ClientSearchCombobox
-                                    id="client_id"
-                                    value={data.client_id}
-                                    onSelect={handleClientSelect}
-                                    placeholder="Buscar cliente..."
-                                />
+                                <div className="flex gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <ClientSearchCombobox
+                                            id="client_id"
+                                            value={data.client_id}
+                                            onSelect={handleClientSelect}
+                                            selectedClient={selectedClient}
+                                            placeholder="Buscar cliente..."
+                                        />
+                                    </div>
+                                    <InlineClientDialog
+                                        onCreated={handleClientSelect}
+                                        trigger={
+                                            <Button type="button" variant="outline" className="shrink-0">
+                                                <Plus className="mr-1 size-4" />
+                                                Nuevo cliente
+                                            </Button>
+                                        }
+                                    />
+                                </div>
                                 <InputError message={errors.client_id} />
                             </div>
 

@@ -1,13 +1,16 @@
-<?php
-
+use App\Jobs\SendElectronicDocumentJob;
 use App\Models\CatalogItem;
 use App\Models\Client;
 use App\Models\ClientSite;
+use App\Models\Equipment;
+use App\Models\InventoryStock;
+use App\Models\InventoryUnit;
 use App\Models\Quote;
 use App\Models\QuoteItem;
 use App\Models\Sale;
 use App\Models\User;
 use App\Models\Vehicle;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Permission;
 
@@ -184,7 +187,7 @@ test('user can convert an accepted quote to sale without re-typing', function ()
     $client = Client::factory()->create();
     $site = ClientSite::factory()->create(['client_id' => $client->id]);
     $vehicle = Vehicle::factory()->create(['client_id' => $client->id]);
-    $catalogItem = CatalogItem::factory()->create(['precio' => 200.00, 'control_serializado' => true]);
+    $catalogItem = CatalogItem::factory()->create(['precio' => 200.00, 'control_serializado' => false]);
 
     $quote = Quote::factory()->create([
         'client_id' => $client->id,
@@ -209,7 +212,7 @@ test('user can convert an accepted quote to sale without re-typing', function ()
     ]);
 
     $this->actingAs($user)
-        ->post(route('quotes.convert', $quote->id))
+        ->post(route('quotes.convert', $quote->id), ['tipo_comprobante' => 'boleta'])
         ->assertRedirect();
 
     // Verify quote updated to convertida
@@ -254,3 +257,138 @@ test('quote cannot be converted to sale unless it was accepted', function (strin
     expect($quote->fresh()->estado)->toBe($estado);
     $this->assertDatabaseCount('sales', 0);
 })->with(['borrador', 'emitida', 'enviada', 'rechazada', 'vencida']);
+
+test('converting a quote with serialized item fails when unit is missing', function () {
+    $user = quoteUser(['quotes.view', 'quotes.create', 'quotes.update', 'quotes.convert', 'sales.view']);
+    $client = Client::factory()->create();
+    $catalogItem = CatalogItem::factory()->create([
+        'precio' => 250.00,
+        'controla_stock' => true,
+        'control_serializado' => true,
+    ]);
+
+    $quote = Quote::factory()->create([
+        'client_id' => $client->id,
+        'vendedor_user_id' => $user->id,
+        'estado' => 'aceptada',
+        'subtotal' => 250.00,
+        'igv' => 45.00,
+        'total' => 295.00,
+    ]);
+
+    $item = QuoteItem::factory()->create([
+        'quote_id' => $quote->id,
+        'catalog_item_id' => $catalogItem->id,
+        'cantidad' => 1,
+        'precio_unitario' => 250.00,
+        'subtotal' => 250.00,
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('quotes.convert', $quote->id), [
+            'tipo_comprobante' => 'boleta',
+            'items' => [],
+        ])
+        ->assertSessionHasErrors(["items.{$item->id}.inventory_unit_id"]);
+
+    expect($quote->fresh()->estado)->toBe('aceptada');
+    $this->assertDatabaseCount('sales', 0);
+});
+
+test('converting a quote with serialized item requires unit, discounts stock and creates equipment', function () {
+    Queue::fake();
+
+    $user = quoteUser(['quotes.view', 'quotes.create', 'quotes.update', 'quotes.convert', 'sales.view']);
+    $client = Client::factory()->create(['tipo_documento' => 'ruc']);
+    $site = ClientSite::factory()->create(['client_id' => $client->id]);
+    $vehicle = Vehicle::factory()->create(['client_id' => $client->id]);
+
+    $catalogItem = CatalogItem::factory()->create([
+        'nombre' => 'Extintor Acetato 6L',
+        'precio' => 300.00,
+        'controla_stock' => true,
+        'control_serializado' => true,
+        'genera_barcode' => true,
+    ]);
+
+    $stock = InventoryStock::where('catalog_item_id', $catalogItem->id)->firstOrFail();
+    $stock->update(['stock_actual' => 3]);
+
+    $unit = InventoryUnit::factory()->create([
+        'catalog_item_id' => $catalogItem->id,
+        'serie' => 'SER-QUOTE-001',
+        'marca' => 'Buckeye',
+        'capacidad' => '6 L',
+        'anio' => 2026,
+        'barcode' => 'EXT-ACET-001',
+        'en_stock' => true,
+        'conforme' => true,
+        'estado' => 'disponible',
+    ]);
+
+    $quote = Quote::factory()->create([
+        'client_id' => $client->id,
+        'client_site_id' => $site->id,
+        'vehicle_id' => $vehicle->id,
+        'vendedor_user_id' => $user->id,
+        'condicion_propuesta' => 'contado',
+        'subtotal' => 300.00,
+        'igv' => 54.00,
+        'total' => 354.00,
+        'estado' => 'aceptada',
+    ]);
+
+    $quoteItem = QuoteItem::factory()->create([
+        'quote_id' => $quote->id,
+        'catalog_item_id' => $catalogItem->id,
+        'cantidad' => 1,
+        'precio_unitario' => 300.00,
+        'descuento' => 0,
+        'subtotal' => 300.00,
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('quotes.convert', $quote->id), [
+            'tipo_comprobante' => 'factura',
+            'items' => [
+                [
+                    'quote_item_id' => $quoteItem->id,
+                    'inventory_unit_id' => $unit->id,
+                ],
+            ],
+        ])
+        ->assertRedirect();
+
+    expect($quote->fresh()->estado)->toBe('convertida');
+
+    $sale = Sale::where('quote_id', $quote->id)->firstOrFail();
+
+    $this->assertDatabaseHas('sale_items', [
+        'sale_id' => $sale->id,
+        'catalog_item_id' => $catalogItem->id,
+        'inventory_unit_id' => $unit->id,
+        'cantidad' => 1,
+    ]);
+
+    expect($stock->fresh()->stock_actual)->toBe('2.000');
+
+    $unit->refresh();
+    expect($unit->en_stock)->toBeFalse();
+    expect($unit->estado)->toBe('vendido');
+
+    $this->assertDatabaseHas('equipment', [
+        'client_id' => $client->id,
+        'client_site_id' => $site->id,
+        'vehicle_id' => $vehicle->id,
+        'origen' => 'vendido_bruce_fire',
+        'tipo_equipo' => 'Extintor Acetato 6L',
+        'marca' => 'Buckeye',
+        'capacidad' => '6 L',
+        'serie_fabricante' => 'SER-QUOTE-001',
+        'anio_fabricacion' => '2026',
+        'barcode' => 'EXT-ACET-001',
+        'estado' => 'activo',
+    ]);
+
+    Queue::assertPushed(SendElectronicDocumentJob::class);
+});

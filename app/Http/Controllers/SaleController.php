@@ -7,14 +7,24 @@ use App\Models\CatalogItem;
 use App\Models\CreditDebitNote;
 use App\Models\ElectronicDocument;
 use App\Models\Sale;
+use App\Services\Billing\BillingService;
+use App\Services\Sales\SaleItemProcessor;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\StreamedResponse;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class SaleController extends Controller
 {
+    public function __construct(
+        private readonly BillingService $billingService,
+        private readonly SaleItemProcessor $saleItemProcessor,
+    ) {}
+
     /**
      * Display a listing of sales.
      */
@@ -25,17 +35,8 @@ class SaleController extends Controller
         $search = $request->string('search')->toString();
         $condicion = $request->string('condicion')->toString();
 
-        $sales = Sale::query()
+        $sales = $this->filteredSalesQuery($request)
             ->with(['client', 'vendedor', 'quote'])
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where('numero', 'like', "%{$search}%")
-                    ->orWhereHas('client', function ($q) use ($search) {
-                        $q->where('razon_social', 'like', "%{$search}%")
-                            ->orWhere('nombre_comercial', 'like', "%{$search}%")
-                            ->orWhere('numero_documento', 'like', "%{$search}%");
-                    });
-            })
-            ->when($condicion !== '' && $condicion !== 'todos', fn ($query) => $query->where('condicion_pago', $condicion))
             ->orderByDesc('id')
             ->paginate(15)
             ->withQueryString();
@@ -46,7 +47,59 @@ class SaleController extends Controller
                 'search' => $search,
                 'condicion' => $condicion,
             ],
+            'hasInternalPdf' => false,
         ]);
+    }
+
+    public function export(Request $request): StreamedResponse
+    {
+        $this->authorize('viewAny', Sale::class);
+
+        $filename = 'ventas-'.now()->format('Ymd-His').'.csv';
+
+        return response()->streamDownload(function () use ($request): void {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, ['Numero', 'Cliente', 'Documento', 'Cotizacion', 'Fecha', 'Condicion', 'Subtotal', 'IGV', 'Total', 'Estado']);
+
+            $this->filteredSalesQuery($request)
+                ->with(['client:id,razon_social,numero_documento', 'quote:id,numero'])
+                ->chunkById(200, function (Collection $sales) use ($handle): void {
+                    foreach ($sales as $sale) {
+                        fputcsv($handle, [
+                            $sale->numero,
+                            $sale->client?->razon_social,
+                            $sale->client?->numero_documento,
+                            $sale->quote?->numero,
+                            $sale->fecha?->toDateString(),
+                            $sale->condicion_pago,
+                            $sale->subtotal,
+                            $sale->igv,
+                            $sale->total,
+                            $sale->estado,
+                        ]);
+                    }
+                });
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    private function filteredSalesQuery(Request $request): Builder
+    {
+        $search = $request->string('search')->toString();
+        $condicion = $request->string('condicion')->toString();
+
+        return Sale::query()
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where('numero', 'like', "%{$search}%")
+                    ->orWhereHas('client', function ($q) use ($search) {
+                        $q->where('razon_social', 'like', "%{$search}%")
+                            ->orWhere('nombre_comercial', 'like', "%{$search}%")
+                            ->orWhere('numero_documento', 'like', "%{$search}%");
+                    });
+            })
+            ->when($condicion !== '' && $condicion !== 'todos', fn ($query) => $query->where('condicion_pago', $condicion));
     }
 
     /**
@@ -86,6 +139,7 @@ class SaleController extends Controller
 
                 $itemsData[] = [
                     'catalog_item_id' => $item['catalog_item_id'],
+                    'inventory_unit_id' => $item['inventory_unit_id'] ?? null,
                     'cantidad' => $cantidad,
                     'precio_unitario' => $precio,
                     'descuento' => $descuento,
@@ -111,9 +165,7 @@ class SaleController extends Controller
                 'observaciones' => $validated['observaciones'] ?? null,
             ]);
 
-            foreach ($itemsData as $itemData) {
-                $sale->items()->create($itemData);
-            }
+            $this->saleItemProcessor->process($sale, $itemsData, $request->user());
 
             if ($validated['condicion_pago'] === 'contado' && ! empty($validated['payments'])) {
                 foreach ($validated['payments'] as $payment) {
@@ -135,6 +187,8 @@ class SaleController extends Controller
                 }
             }
 
+            $this->billingService->issue($sale, $validated['tipo_comprobante']);
+
             return $sale;
         });
 
@@ -155,6 +209,7 @@ class SaleController extends Controller
             'vendedor',
             'quote',
             'items.catalogItem',
+            'items.inventoryUnit',
             'payments',
             'installments',
         ]);

@@ -38,10 +38,30 @@ test('a user with equipment.view can list equipment', function () {
 });
 
 test('a user without equipment.view cannot list equipment', function () {
-    $user = equipmentUserWithRole('Almacén');
+    $user = User::factory()->create();
 
     $this->actingAs($user)
         ->get(route('equipment.index'))
+        ->assertForbidden();
+});
+
+test('warehouse role can list equipment read-only', function () {
+    $user = equipmentUserWithRole('Almacén');
+    Equipment::factory()->count(2)->create();
+
+    $this->actingAs($user)
+        ->get(route('equipment.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('equipment/index')
+            ->has('equipment.data', 2)
+        );
+
+    $this->actingAs($user)
+        ->post(route('equipment.store'), [
+            'origen' => 'desconocido',
+            'tipo_equipo' => 'Extintor',
+        ])
         ->assertForbidden();
 });
 

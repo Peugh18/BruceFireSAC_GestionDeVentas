@@ -1,6 +1,8 @@
 import { ClientSearchCombobox } from '@/components/client-search-combobox';
+import { InlineClientDialog } from '@/components/clients/inline-client-dialog';
 import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,10 +13,11 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Client, type ClientSite, type Vehicle } from '@/types';
 import { type CatalogItem } from '@/types/catalog';
+import { type InventoryUnit } from '@/types/inventory';
 import { type FormaPago } from '@/types/sale';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
-import { FormEventHandler, useMemo, useState } from 'react';
+import { ArrowLeft, Plus, ScanBarcode, Trash2 } from 'lucide-react';
+import { FormEventHandler, KeyboardEvent, useMemo, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Ventas', href: route('sales.index') },
@@ -32,10 +35,13 @@ const PLAZOS = [
 
 interface FormSaleItem {
     catalog_item_id: number;
+    inventory_unit_id: number | null;
     cantidad: number;
     precio_unitario: number;
     descuento: number;
 }
+
+type SaleInventoryUnit = InventoryUnit & { catalog_item?: CatalogItem };
 
 interface FormPayment {
     forma_pago: FormaPago;
@@ -54,6 +60,7 @@ interface SaleFormState {
     client_id: string | number;
     client_site_id: string | number;
     vehicle_id: string | number;
+    tipo_comprobante: 'boleta' | 'factura';
     fecha: string;
     condicion_pago: 'contado' | 'credito';
     observaciones: string;
@@ -71,11 +78,17 @@ export default function SaleCreate({ catalogItems }: { catalogItems: CatalogItem
     // plazo state: 0 = custom (user edits dates manually)
     const [plazo, setPlazo] = useState<number>(30);
     const [customPlazo, setCustomPlazo] = useState<number>(30);
+    const [barcodeQuery, setBarcodeQuery] = useState('');
+    const [barcodeError, setBarcodeError] = useState('');
+    const [unitQueries, setUnitQueries] = useState<Record<number, string>>({});
+    const [unitSearchResults, setUnitSearchResults] = useState<Record<number, SaleInventoryUnit[]>>({});
+    const [unitSearchErrors, setUnitSearchErrors] = useState<Record<number, string>>({});
 
     const { data, setData, post, processing, errors } = useForm<SaleFormState>({
         client_id: '',
         client_site_id: '',
         vehicle_id: '',
+        tipo_comprobante: 'boleta',
         fecha: today,
         condicion_pago: 'contado',
         observaciones: '',
@@ -86,26 +99,33 @@ export default function SaleCreate({ catalogItems }: { catalogItems: CatalogItem
 
     const availableSites = selectedClient?.sites ?? [];
     const availableVehicles = selectedClient?.vehicles ?? [];
+    const attentionType = data.vehicle_id ? 'VEHICULO' : data.client_site_id ? 'LOCAL' : null;
 
     const handleClientSelect = (client: Client) => {
         setSelectedClient(client);
+        const suggestedTipo = client.tipo_documento === 'ruc' ? 'factura' : 'boleta';
         setData((prev) => ({
             ...prev,
             client_id: client.id,
             client_site_id: '',
             vehicle_id: '',
+            tipo_comprobante: suggestedTipo,
         }));
     };
 
     const addItem = () => {
         if (catalogItems.length === 0) return;
-        const defaultItem = catalogItems[0];
+        addCatalogItem(catalogItems[0]);
+    };
+
+    const addCatalogItem = (catalogItem: CatalogItem) => {
         setData('items', [
             ...data.items,
             {
-                catalog_item_id: defaultItem.id,
+                catalog_item_id: catalogItem.id,
+                inventory_unit_id: null,
                 cantidad: 1,
-                precio_unitario: parseFloat(defaultItem.precio) || 0,
+                precio_unitario: parseFloat(catalogItem.precio) || 0,
                 descuento: 0,
             },
         ]);
@@ -124,9 +144,146 @@ export default function SaleCreate({ catalogItems }: { catalogItems: CatalogItem
             const found = catalogItems.find((ci) => ci.id === value);
             if (found) {
                 next[index].precio_unitario = parseFloat(found.precio) || 0;
+                next[index].cantidad = found.control_serializado ? 1 : next[index].cantidad;
+                next[index].inventory_unit_id = null;
+                setUnitQueries((previous) => ({ ...previous, [index]: '' }));
+                setUnitSearchResults((previous) => ({ ...previous, [index]: [] }));
+                setUnitSearchErrors((previous) => ({ ...previous, [index]: '' }));
             }
         }
         setData('items', next);
+    };
+
+    const selectUnit = (index: number, unit: SaleInventoryUnit) => {
+        const next = [...data.items];
+        const catalogItem = unit.catalog_item ?? catalogItems.find((item) => item.id === unit.catalog_item_id);
+
+        if (catalogItem) {
+            next[index] = {
+                ...next[index],
+                catalog_item_id: catalogItem.id,
+                inventory_unit_id: unit.id,
+                cantidad: 1,
+                precio_unitario: parseFloat(catalogItem.precio) || next[index].precio_unitario,
+            };
+        } else {
+            next[index] = { ...next[index], inventory_unit_id: unit.id, cantidad: 1 };
+        }
+
+        setData('items', next);
+        setUnitQueries((previous) => ({ ...previous, [index]: unit.barcode ?? unit.serie }));
+        setUnitSearchResults((previous) => ({ ...previous, [index]: [] }));
+        setUnitSearchErrors((previous) => ({ ...previous, [index]: '' }));
+    };
+
+    const searchUnit = async (index: number, term: string, catalogItemId?: number) => {
+        const query = term.trim();
+        if (!query) {
+            return;
+        }
+
+        const params = new URLSearchParams({ barcode: query });
+        if (catalogItemId) {
+            params.set('catalog_item_id', String(catalogItemId));
+        }
+
+        const response = await fetch(`${route('inventory-units.search')}?${params.toString()}`, {
+            headers: { Accept: 'application/json' },
+        });
+
+        if (!response.ok) {
+            setUnitSearchErrors((previous) => ({ ...previous, [index]: 'No se pudo buscar la unidad escaneada.' }));
+            return;
+        }
+
+        const payload = (await response.json()) as { unit: SaleInventoryUnit | null; units: SaleInventoryUnit[] };
+        if (payload.unit) {
+            selectUnit(index, payload.unit);
+            return;
+        }
+
+        setUnitSearchResults((previous) => ({ ...previous, [index]: payload.units }));
+        setUnitSearchErrors((previous) => ({
+            ...previous,
+            [index]: payload.units.length === 0 ? 'No se encontro una unidad disponible con ese barcode o serie.' : '',
+        }));
+    };
+
+    const handleUnitSearch = async (index: number, catalogItemId: number, event: KeyboardEvent<HTMLInputElement>) => {
+        if (event.key !== 'Enter') {
+            return;
+        }
+
+        event.preventDefault();
+        await searchUnit(index, unitQueries[index] ?? '', catalogItemId);
+    };
+
+    const handleBarcodeSearch = async (event: KeyboardEvent<HTMLInputElement>) => {
+        if (event.key !== 'Enter') {
+            return;
+        }
+
+        event.preventDefault();
+
+        const barcode = barcodeQuery.trim();
+        if (!barcode) {
+            return;
+        }
+
+        const localMatch = catalogItems.find((item) => item.codigo === barcode);
+        if (localMatch) {
+            addCatalogItem(localMatch);
+            setBarcodeQuery('');
+            setBarcodeError('');
+            return;
+        }
+
+        const response = await fetch(`${route('catalog-items.search')}?barcode=${encodeURIComponent(barcode)}`, {
+            headers: { Accept: 'application/json' },
+        });
+
+        if (!response.ok) {
+            setBarcodeError('No se pudo buscar el codigo escaneado.');
+            return;
+        }
+
+        const payload = (await response.json()) as { item: CatalogItem | null };
+        if (!payload.item) {
+            const unitResponse = await fetch(`${route('inventory-units.search')}?barcode=${encodeURIComponent(barcode)}`, {
+                headers: { Accept: 'application/json' },
+            });
+
+            if (!unitResponse.ok) {
+                setBarcodeError('No se encontro un producto activo o unidad disponible con ese codigo.');
+                return;
+            }
+
+            const unitPayload = (await unitResponse.json()) as { unit: SaleInventoryUnit | null };
+            if (!unitPayload.unit?.catalog_item) {
+                setBarcodeError('No se encontro un producto activo o unidad disponible con ese codigo.');
+                return;
+            }
+
+            const rowIndex = data.items.length;
+            setData('items', [
+                ...data.items,
+                {
+                    catalog_item_id: unitPayload.unit.catalog_item.id,
+                    inventory_unit_id: unitPayload.unit.id,
+                    cantidad: 1,
+                    precio_unitario: parseFloat(unitPayload.unit.catalog_item.precio) || 0,
+                    descuento: 0,
+                },
+            ]);
+            setUnitQueries((previous) => ({ ...previous, [rowIndex]: unitPayload.unit?.barcode ?? unitPayload.unit?.serie ?? '' }));
+            setBarcodeQuery('');
+            setBarcodeError('');
+            return;
+        }
+
+        addCatalogItem(payload.item);
+        setBarcodeQuery('');
+        setBarcodeError('');
     };
 
     const totals = useMemo(() => {
@@ -213,12 +370,26 @@ export default function SaleCreate({ catalogItems }: { catalogItems: CatalogItem
                         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                             <div className="space-y-2">
                                 <Label htmlFor="client_id">Cliente *</Label>
-                                <ClientSearchCombobox
-                                    id="client_id"
-                                    value={data.client_id}
-                                    onSelect={handleClientSelect}
-                                    placeholder="Buscar cliente..."
-                                />
+                                <div className="flex gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <ClientSearchCombobox
+                                            id="client_id"
+                                            value={data.client_id}
+                                            onSelect={handleClientSelect}
+                                            selectedClient={selectedClient}
+                                            placeholder="Buscar cliente..."
+                                        />
+                                    </div>
+                                    <InlineClientDialog
+                                        onCreated={handleClientSelect}
+                                        trigger={
+                                            <Button type="button" variant="outline" className="shrink-0">
+                                                <Plus className="mr-1 size-4" />
+                                                Nuevo cliente
+                                            </Button>
+                                        }
+                                    />
+                                </div>
                                 <InputError message={errors.client_id} />
                             </div>
 
@@ -262,6 +433,37 @@ export default function SaleCreate({ catalogItems }: { catalogItems: CatalogItem
                                     </SelectContent>
                                 </Select>
                                 <InputError message={errors.vehicle_id} />
+                            </div>
+
+                            {attentionType && (
+                                <div className="space-y-2">
+                                    <Label>Tipo de atencion</Label>
+                                    <div>
+                                        <Badge variant="secondary">Atencion: {attentionType}</Badge>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="space-y-2">
+                                <Label htmlFor="tipo_comprobante">Tipo de Comprobante *</Label>
+                                <Select
+                                    value={data.tipo_comprobante}
+                                    onValueChange={(val: 'boleta' | 'factura') => setData('tipo_comprobante', val)}
+                                >
+                                    <SelectTrigger id="tipo_comprobante">
+                                        <SelectValue placeholder="Selecciona tipo de comprobante" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="boleta">Boleta</SelectItem>
+                                        <SelectItem value="factura">Factura</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                {data.tipo_comprobante === 'factura' && selectedClient && selectedClient.tipo_documento !== 'ruc' && (
+                                    <p className="text-xs text-destructive">
+                                        Una factura requiere RUC. El cliente seleccionado tiene tipo {selectedClient.tipo_documento.toUpperCase()}.
+                                    </p>
+                                )}
+                                <InputError message={errors.tipo_comprobante} />
                             </div>
 
                             <div className="space-y-2">
@@ -321,6 +523,22 @@ export default function SaleCreate({ catalogItems }: { catalogItems: CatalogItem
                         <CardContent className="space-y-4">
                             <InputError message={errors.items} />
 
+                            <div className="max-w-sm space-y-2">
+                                <Label htmlFor="barcode_search">Lector de codigo de barras</Label>
+                                <div className="relative">
+                                    <ScanBarcode className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                                    <Input
+                                        id="barcode_search"
+                                        value={barcodeQuery}
+                                        onChange={(event) => setBarcodeQuery(event.target.value)}
+                                        onKeyDown={handleBarcodeSearch}
+                                        placeholder="Escanea o escribe codigo y Enter"
+                                        className="pl-9"
+                                    />
+                                </div>
+                                {barcodeError && <p className="text-sm text-destructive">{barcodeError}</p>}
+                            </div>
+
                             <div className="rounded-md border">
                                 <Table>
                                     <TableHeader>
@@ -343,6 +561,8 @@ export default function SaleCreate({ catalogItems }: { catalogItems: CatalogItem
                                         )}
 
                                         {data.items.map((item, index) => {
+                                            const selectedCatalogItem = catalogItems.find((catalogItem) => catalogItem.id === item.catalog_item_id);
+                                            const selectedUnit = unitSearchResults[index]?.find((unit) => unit.id === item.inventory_unit_id);
                                             const itemSubtotal = Math.max(0, item.cantidad * item.precio_unitario - (item.descuento || 0));
                                             return (
                                                 <TableRow key={index}>
@@ -364,13 +584,59 @@ export default function SaleCreate({ catalogItems }: { catalogItems: CatalogItem
                                                         </Select>
                                                     </TableCell>
                                                     <TableCell>
-                                                        <Input
-                                                            type="number"
-                                                            min="0.01"
-                                                            step="0.01"
-                                                            value={item.cantidad}
-                                                            onChange={(e) => updateItem(index, 'cantidad', parseFloat(e.target.value) || 0)}
-                                                        />
+                                                        {selectedCatalogItem?.control_serializado ? (
+                                                            <div className="space-y-2">
+                                                                <Input value="1" disabled />
+                                                                <div className="space-y-1">
+                                                                    <Input
+                                                                        value={unitQueries[index] ?? ''}
+                                                                        onChange={(event) => setUnitQueries((previous) => ({ ...previous, [index]: event.target.value }))}
+                                                                        onKeyDown={(event) => handleUnitSearch(index, selectedCatalogItem.id, event)}
+                                                                        placeholder="Serie/barcode + Enter"
+                                                                    />
+                                                                    {item.inventory_unit_id && (
+                                                                        <p className="text-muted-foreground text-xs">
+                                                                            Unidad seleccionada:{' '}
+                                                                            {selectedUnit
+                                                                                ? `${selectedUnit.serie}${selectedUnit.barcode ? ` · ${selectedUnit.barcode}` : ''}`
+                                                                                : `#${item.inventory_unit_id}`}
+                                                                        </p>
+                                                                    )}
+                                                                    {unitSearchResults[index]?.length > 0 && (
+                                                                        <Select
+                                                                            value={item.inventory_unit_id ? String(item.inventory_unit_id) : ''}
+                                                                            onValueChange={(value) => {
+                                                                                const unit = unitSearchResults[index]?.find((candidate) => candidate.id === Number(value));
+                                                                                if (unit) {
+                                                                                    selectUnit(index, unit);
+                                                                                }
+                                                                            }}
+                                                                        >
+                                                                            <SelectTrigger>
+                                                                                <SelectValue placeholder="Selecciona unidad" />
+                                                                            </SelectTrigger>
+                                                                            <SelectContent>
+                                                                                {unitSearchResults[index].map((unit) => (
+                                                                                    <SelectItem key={unit.id} value={String(unit.id)}>
+                                                                                        {unit.serie} {unit.barcode ? `· ${unit.barcode}` : ''}
+                                                                                    </SelectItem>
+                                                                                ))}
+                                                                            </SelectContent>
+                                                                        </Select>
+                                                                    )}
+                                                                    {unitSearchErrors[index] && <p className="text-xs text-destructive">{unitSearchErrors[index]}</p>}
+                                                                    <InputError message={(errors as Record<string, string>)[`items.${index}.inventory_unit_id`]} />
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <Input
+                                                                type="number"
+                                                                min="0.01"
+                                                                step="0.01"
+                                                                value={item.cantidad}
+                                                                onChange={(e) => updateItem(index, 'cantidad', parseFloat(e.target.value) || 0)}
+                                                            />
+                                                        )}
                                                     </TableCell>
                                                     <TableCell>
                                                         <Input

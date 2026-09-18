@@ -10,8 +10,10 @@ use App\Models\User;
 use App\Services\Billing\BillingService;
 use App\Services\Billing\Data\SunatSendResult;
 use App\Services\Billing\GreenterService;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Permission;
 
 function billingUser(array $permissions = ['billing.view', 'billing.issue', 'billing.retry']): User
@@ -47,6 +49,46 @@ test('billing issue route redirects guests to login', function () {
     $sale = Sale::factory()->create();
 
     $this->post(route('billing.issue', $sale->id))->assertRedirect(route('login'));
+});
+
+test('billing view permission can open the electronic document list', function () {
+    $user = billingUser(['billing.view']);
+
+    ElectronicDocument::factory()->create(['correlativo' => '00000001']);
+    ElectronicDocument::factory()->create(['correlativo' => '00000002']);
+
+    $this->actingAs($user)
+        ->get(route('billing.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('billing/index')
+            ->has('documents.data', 2)
+        );
+});
+
+test('seller role can open the electronic document list with billing view permission', function () {
+    $this->seed(RolesAndPermissionsSeeder::class);
+
+    $user = User::factory()->create();
+    $user->assignRole('Vendedor');
+
+    $this->actingAs($user)
+        ->get(route('billing.index'))
+        ->assertOk();
+});
+
+test('billing view permission alone cannot issue or retry documents', function () {
+    $user = billingUser(['billing.view']);
+    $sale = Sale::factory()->create();
+    $document = ElectronicDocument::factory()->error()->create();
+
+    $this->actingAs($user)
+        ->post(route('billing.issue', $sale->id))
+        ->assertForbidden();
+
+    $this->actingAs($user)
+        ->post(route('billing.retry', $document->id))
+        ->assertForbidden();
 });
 
 test('user without billing.issue permission is forbidden', function () {

@@ -5,6 +5,7 @@ namespace App\Models;
 use Database\Factories\CatalogItemFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 class CatalogItem extends Model
@@ -55,5 +56,11 @@ class CatalogItem extends Model
             'requiere_orden' => 'boolean',
             'requiere_certificado' => 'boolean',
         ];
+    }
+
+    /** @return HasOne<InventoryStock, $this> */
+    public function inventoryStock(): HasOne
+    {
+        return $this->hasOne(InventoryStock::class);
     }
 }

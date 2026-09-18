@@ -1,3 +1,4 @@
+import { CatalogInventoryTabs } from '@/components/catalog-inventory-tabs';
 import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import InventoryField from '@/components/inventory-field';
@@ -39,6 +40,7 @@ export default function Show({
     return (
         <AppLayout
             breadcrumbs={[
+                { title: 'Catálogo', href: route('catalog.index') },
                 { title: 'Inventario', href: route('inventory.index') },
                 { title: stock.catalog_item.nombre, href: route('inventory.show', stock.id) },
             ]}
@@ -51,6 +53,7 @@ export default function Show({
                         <Link href={route('inventory.movements', { catalog_item_id: stock.catalog_item_id })}>Ver movimientos</Link>
                     </Button>
                 </div>
+                <CatalogInventoryTabs active="inventory" />
                 {status && (
                     <div role="status" className="bg-muted/50 rounded-lg border px-4 py-3 text-sm">
                         {status}

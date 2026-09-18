@@ -63,9 +63,14 @@ export default function CollectionsShow({
             <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <HeadingSmall title={`Cobranza ${sale.numero}`} description={`${sale.client.razon_social} · ${sale.client.numero_documento}`} />
-                    <Button variant="outline" asChild>
-                        <Link href={route('collections.index')}>Volver a cobranzas</Link>
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" asChild>
+                            <Link href={route('sales.show', sale.id)}>Ver venta</Link>
+                        </Button>
+                        <Button variant="outline" asChild>
+                            <Link href={route('collections.index')}>Volver a cobranzas</Link>
+                        </Button>
+                    </div>
                 </div>
                 {status && (
                     <div role="status" className="bg-muted/50 rounded-lg border px-4 py-3 text-sm">

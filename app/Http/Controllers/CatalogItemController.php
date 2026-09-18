@@ -6,6 +6,7 @@ use App\Http\Requests\StoreCatalogItemRequest;
 use App\Http\Requests\UpdateCatalogItemRequest;
 use App\Models\CatalogItem;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -29,6 +30,7 @@ class CatalogItemController extends Controller
         $tipo = $filters['tipo'] ?? '';
 
         $items = CatalogItem::query()
+            ->with('inventoryStock')
             ->when($tipo !== '', fn (Builder $query) => $query->where('tipo', $tipo))
             ->when($search !== '', function (Builder $query) use ($search): void {
                 $query->where(function (Builder $query) use ($search): void {
@@ -71,7 +73,7 @@ class CatalogItemController extends Controller
     {
         Gate::authorize('update', $catalogItem);
 
-        return Inertia::render('catalog/edit', ['item' => $catalogItem]);
+        return Inertia::render('catalog/edit', ['item' => $catalogItem->load('inventoryStock')]);
     }
 
     public function update(UpdateCatalogItemRequest $request, CatalogItem $catalogItem): RedirectResponse
@@ -79,5 +81,23 @@ class CatalogItemController extends Controller
         $catalogItem->update($request->validated());
 
         return to_route('catalog.index')->with('catalog_status', 'Registro actualizado correctamente.');
+    }
+
+    public function search(Request $request): JsonResponse
+    {
+        abort_unless($request->user()?->can('sales.create'), 403);
+
+        $filters = $request->validate([
+            'barcode' => ['required', 'string', 'max:100'],
+        ]);
+
+        $item = CatalogItem::query()
+            ->where('activo', true)
+            ->where('codigo', $filters['barcode'])
+            ->first();
+
+        return response()->json([
+            'item' => $item,
+        ]);
     }
 }

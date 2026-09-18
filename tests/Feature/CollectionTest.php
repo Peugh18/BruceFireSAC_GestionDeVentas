@@ -322,10 +322,10 @@ test('payment permission alone does not bypass view permission', function () {
 test('creating a cash sale does not create pending installments', function () {
     $user = collectionUser(['collections.view', 'sales.view', 'sales.create']);
     $client = Client::factory()->create();
-    $item = CatalogItem::factory()->create();
+    $item = CatalogItem::factory()->create(['controla_stock' => false]);
 
     $this->actingAs($user)->post(route('sales.store'), [
-        'client_id' => $client->id, 'fecha' => '2026-09-18', 'condicion_pago' => 'contado',
+        'client_id' => $client->id, 'tipo_comprobante' => 'boleta', 'fecha' => '2026-09-18', 'condicion_pago' => 'contado',
         'items' => [['catalog_item_id' => $item->id, 'cantidad' => 1, 'precio_unitario' => 100, 'descuento' => 0]],
         'payments' => [['forma_pago' => 'efectivo', 'monto' => 118]],
     ])->assertRedirect();

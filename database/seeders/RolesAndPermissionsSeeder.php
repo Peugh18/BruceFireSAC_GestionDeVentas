@@ -25,7 +25,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'certificates.view', 'certificates.generate', 'certificates.void',
         'billing.view', 'billing.issue', 'billing.retry', 'billing.credit_note',
         'collections.view', 'collections.register_payment',
-        'reports.view',
+        'reports.view', 'ai_assistant.view',
         'users.manage', 'roles.manage', 'settings.manage', 'audit.view',
     ];
 

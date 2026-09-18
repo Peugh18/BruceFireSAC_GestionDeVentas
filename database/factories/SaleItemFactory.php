@@ -27,6 +27,7 @@ class SaleItemFactory extends Factory
         return [
             'sale_id' => Sale::factory(),
             'catalog_item_id' => CatalogItem::factory(),
+            'inventory_unit_id' => null,
             'cantidad' => $cantidad,
             'precio_unitario' => $precioUnitario,
             'descuento' => $descuento,

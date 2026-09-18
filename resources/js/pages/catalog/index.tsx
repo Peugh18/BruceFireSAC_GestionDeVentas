@@ -1,5 +1,6 @@
 import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
+import { InventoryStockBadge } from '@/components/inventory-stock-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { catalogTypes, type CatalogItem } from '@/types/catalog';
+import { quantity } from '@/types/inventory';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { PackageSearch, Plus, Search } from 'lucide-react';
 import { type FormEventHandler } from 'react';
@@ -26,6 +28,21 @@ interface CatalogProps {
 }
 
 const price = new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' });
+
+function StockCell({ item }: { item: CatalogItem }) {
+    if (!item.controla_stock || !item.inventory_stock) {
+        return <span className="text-muted-foreground text-sm">No aplica</span>;
+    }
+
+    return (
+        <div className="space-y-1">
+            <p className="text-sm tabular-nums">
+                {quantity(item.inventory_stock.stock_actual)} / {quantity(item.inventory_stock.stock_minimo)}
+            </p>
+            <InventoryStockBadge stockActual={item.inventory_stock.stock_actual} stockMinimo={item.inventory_stock.stock_minimo} />
+        </div>
+    );
+}
 
 export default function Index({ items, filters, can, status }: CatalogProps) {
     const { data, setData, get, processing, errors } = useForm({ search: filters.search, tipo: filters.tipo });
@@ -113,7 +130,7 @@ export default function Index({ items, filters, can, status }: CatalogProps) {
                                 <caption className="sr-only">Registros del catálogo</caption>
                                 <thead className="bg-muted/50 text-muted-foreground border-b">
                                     <tr>
-                                        {['Registro', 'Tipo', 'Unidad', 'Precio', 'IGV', 'Estado', 'Acciones'].map((label) => (
+                                        {['Registro', 'Tipo', 'Unidad', 'Precio', 'IGV', 'Stock', 'Estado', 'Acciones'].map((label) => (
                                             <th key={label} scope="col" className="px-4 py-3 font-medium">
                                                 {label}
                                             </th>
@@ -132,6 +149,9 @@ export default function Index({ items, filters, can, status }: CatalogProps) {
                                             <td className="px-4 py-4">{item.unidad}</td>
                                             <td className="px-4 py-4 whitespace-nowrap tabular-nums">{price.format(Number(item.precio))}</td>
                                             <td className="px-4 py-4">{item.aplica_igv ? 'Aplica' : 'No aplica'}</td>
+                                            <td className="px-4 py-4">
+                                                <StockCell item={item} />
+                                            </td>
                                             <td className="px-4 py-4">
                                                 <Badge variant={item.activo ? 'secondary' : 'outline'}>{item.activo ? 'Activo' : 'Inactivo'}</Badge>
                                             </td>
@@ -163,6 +183,7 @@ export default function Index({ items, filters, can, status }: CatalogProps) {
                                     <p className="text-sm">
                                         {price.format(Number(item.precio))} / {item.unidad} · {item.aplica_igv ? 'Aplica IGV' : 'No aplica IGV'}
                                     </p>
+                                    <StockCell item={item} />
                                     {can.update && (
                                         <Button variant="outline" size="sm" asChild>
                                             <Link href={route('catalog.edit', item.id)}>Editar</Link>

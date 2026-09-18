@@ -1,5 +1,6 @@
 import { CatalogItem } from './catalog';
 import { Client, ClientSite, User, Vehicle } from './index';
+import { InventoryUnit } from './inventory';
 import { Quote } from './quote';
 
 export type CondicionPago = 'contado' | 'credito';
@@ -11,11 +12,13 @@ export interface SaleItem {
     id?: number;
     sale_id?: number;
     catalog_item_id: number;
+    inventory_unit_id?: number | null;
     cantidad: number;
     precio_unitario: number;
     descuento: number;
     subtotal: number;
     catalog_item?: CatalogItem;
+    inventory_unit?: InventoryUnit | null;
 }
 
 export interface SalePayment {

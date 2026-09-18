@@ -1,6 +1,7 @@
 import HeadingSmall from '@/components/heading-small';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -8,7 +9,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated, type SharedData } from '@/types';
 import { type Sale, type SaleEstado } from '@/types/sale';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Eye, Plus, Search, ShoppingBag } from 'lucide-react';
+import { Download, Eye, FileText, MoreHorizontal, Plus, Search, ShoppingBag } from 'lucide-react';
 import { FormEventHandler, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Ventas', href: route('sales.index') }];
@@ -27,10 +28,12 @@ const formatCurrency = (amount: number | string) => {
 export default function SalesIndex({
     sales,
     filters,
+    hasInternalPdf,
     status,
 }: {
     sales: Paginated<Sale>;
     filters: { search: string; condicion: string };
+    hasInternalPdf: boolean;
     status?: string;
 }) {
     const { auth } = usePage<SharedData>().props;
@@ -55,6 +58,11 @@ export default function SalesIndex({
         applyFilters(search, condicion);
     };
 
+    const exportUrl = route('sales.export', {
+        search: search || undefined,
+        condicion: condicion === 'todos' ? undefined : condicion,
+    });
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Ventas" />
@@ -63,13 +71,21 @@ export default function SalesIndex({
                 <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                     <HeadingSmall title="Ventas" description="Registro comercial de ventas al contado y credito." />
 
-                    {canCreate && (
-                        <Button asChild>
-                            <Link href={route('sales.create')}>
-                                <Plus className="size-4 mr-1" /> Nueva venta
-                            </Link>
+                    <div className="flex flex-wrap gap-2">
+                        <Button asChild variant="outline">
+                            <a href={exportUrl}>
+                                <Download className="mr-1 size-4" /> Exportar
+                            </a>
                         </Button>
-                    )}
+
+                        {canCreate && (
+                            <Button asChild>
+                                <Link href={route('sales.create')}>
+                                    <Plus className="size-4 mr-1" /> Nueva venta
+                                </Link>
+                            </Button>
+                        )}
+                    </div>
                 </div>
 
                 {status && (
@@ -150,11 +166,26 @@ export default function SalesIndex({
                                         <Badge variant={ESTADO_BADGE_VARIANT[sale.estado]}>{sale.estado.toUpperCase()}</Badge>
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        <Button asChild variant="ghost" size="sm">
-                                            <Link href={route('sales.show', sale.id)}>
-                                                <Eye className="size-4 mr-1" /> Ver
-                                            </Link>
-                                        </Button>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon">
+                                                    <MoreHorizontal className="size-4" />
+                                                    <span className="sr-only">Abrir acciones</span>
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem asChild>
+                                                    <Link href={route('sales.show', sale.id)}>
+                                                        <Eye className="mr-2 size-4" />
+                                                        Ver
+                                                    </Link>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem disabled={!hasInternalPdf}>
+                                                    <FileText className="mr-2 size-4" />
+                                                    Ver PDF
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     </TableCell>
                                 </TableRow>
                             ))}

@@ -17,7 +17,7 @@ class EquipmentPermissionsSeeder extends Seeder
             Permission::findOrCreate($permission, 'web');
         }
 
-        foreach (['Gerente', 'Vendedor', 'Técnico de Planta', 'Técnico de Campo'] as $roleName) {
+        foreach (['Gerente', 'Vendedor', 'Almacén', 'Técnico de Planta', 'Técnico de Campo'] as $roleName) {
             $role = Role::where('name', $roleName)->where('guard_name', 'web')->first();
 
             if (! $role) {
