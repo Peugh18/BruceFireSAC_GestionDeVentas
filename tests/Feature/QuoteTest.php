@@ -242,3 +242,15 @@ test('user can convert an accepted quote to sale without re-typing', function ()
         'subtotal' => 200.00,
     ]);
 });
+
+test('quote cannot be converted to sale unless it was accepted', function (string $estado) {
+    $user = quoteUser(['quotes.view', 'quotes.create', 'quotes.update', 'quotes.convert', 'sales.view']);
+    $quote = Quote::factory()->create(['estado' => $estado]);
+
+    $this->actingAs($user)
+        ->post(route('quotes.convert', $quote->id))
+        ->assertForbidden();
+
+    expect($quote->fresh()->estado)->toBe($estado);
+    $this->assertDatabaseCount('sales', 0);
+})->with(['borrador', 'emitida', 'enviada', 'rechazada', 'vencida']);

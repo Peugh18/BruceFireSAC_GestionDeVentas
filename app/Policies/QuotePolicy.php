@@ -44,7 +44,7 @@ class QuotePolicy
      */
     public function convert(User $user, Quote $quote): bool
     {
-        return $user->can('quotes.convert') && in_array($quote->estado, ['borrador', 'emitida', 'enviada', 'aceptada'], true);
+        return $user->can('quotes.convert') && $quote->estado === 'aceptada';
     }
 
     /**
