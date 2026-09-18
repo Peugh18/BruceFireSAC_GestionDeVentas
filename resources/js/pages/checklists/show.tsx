@@ -133,7 +133,7 @@ export default function ChecklistShow({
                             const isObservado = item.condicion === 'observado';
 
                             return (
-                                <Card key={index} className={`transition-all ${isObservado ? 'border-amber-500/50 bg-amber-500/5' : ''}`}>
+                                <Card key={index} className={`transition-all ${isObservado ? 'border-warning/50 bg-warning/5' : ''}`}>
                                     <CardContent className="p-4 space-y-3">
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                             <span className="font-semibold text-sm text-foreground">
@@ -156,7 +156,7 @@ export default function ChecklistShow({
                                                     type="button"
                                                     size="sm"
                                                     variant={item.condicion === 'observado' ? 'default' : 'outline'}
-                                                    className={`h-10 text-xs gap-1 ${item.condicion === 'observado' ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}`}
+                                                    className={`h-10 text-xs gap-1 ${item.condicion === 'observado' ? 'bg-warning hover:bg-warning/90 text-warning-foreground' : ''}`}
                                                     onClick={() => setCondition(index, 'observado')}
                                                 >
                                                     <AlertTriangle className="size-3.5" /> Observado
@@ -178,7 +178,7 @@ export default function ChecklistShow({
                                         {isObservado && (
                                             <div className="pt-3 border-t space-y-3 text-xs">
                                                 <div className="space-y-1">
-                                                    <Label className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                                                    <Label className="text-xs text-warning font-medium">
                                                         Detalle de la Observación / Nota
                                                     </Label>
                                                     <Textarea
