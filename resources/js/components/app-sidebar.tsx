@@ -3,24 +3,37 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, LayoutGrid } from 'lucide-react';
+import { BookOpen, LayoutGrid, Users } from 'lucide-react';
 import AppLogo from './app-logo';
-
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        url: '/dashboard',
-        icon: LayoutGrid,
-    },
-];
 
 export function AppSidebar() {
     const { auth } = usePage<SharedData>().props;
-    const items: NavItem[] = [...mainNavItems];
 
-    if (auth.can_view_catalog) {
-        items.push({ title: 'Catálogo', url: route('catalog.index', {}, false), icon: BookOpen });
-    }
+    const items: NavItem[] = [
+        {
+            title: 'Dashboard',
+            url: '/dashboard',
+            icon: LayoutGrid,
+        },
+        ...(auth.permissions.includes('clients.view')
+            ? [
+                  {
+                      title: 'Clientes',
+                      url: '/clients',
+                      icon: Users,
+                  },
+              ]
+            : []),
+        ...(auth.permissions.includes('catalog.view')
+            ? [
+                  {
+                      title: 'Catálogo',
+                      url: route('catalog.index', {}, false),
+                      icon: BookOpen,
+                  },
+              ]
+            : []),
+    ];
 
     return (
         <Sidebar collapsible="icon" variant="inset">
