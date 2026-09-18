@@ -3,6 +3,7 @@
 namespace App\Services\Billing;
 
 use App\Models\ElectronicDocument;
+use App\Notifications\SunatErrorNotification;
 use App\Services\Billing\Data\SunatSendResult;
 use Illuminate\Support\Facades\Storage;
 
@@ -28,6 +29,14 @@ class SunatResponseService
             $updates['estado'] = 'error';
             $updates['error'] = $result->errorMessage;
             $document->update($updates);
+
+            // Notify the seller so they can act on the SUNAT error.
+            $document->loadMissing('sale.vendedor');
+            $vendedor = $document->sale?->vendedor;
+
+            if ($vendedor) {
+                $vendedor->notify(new SunatErrorNotification($document));
+            }
 
             return;
         }

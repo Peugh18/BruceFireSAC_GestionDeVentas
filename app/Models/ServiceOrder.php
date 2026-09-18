@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Notifications\ServiceOrderAssignedNotification;
+use App\Notifications\ServiceOrderFinishedNotification;
 use Database\Factories\ServiceOrderFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -92,6 +94,11 @@ class ServiceOrder extends Model
                 'estado' => $order->estado,
                 'user_id' => auth()->id(),
             ]);
+
+            // Notify the assigned technician of the new order.
+            if ($order->tecnico_user_id) {
+                $order->tecnico?->notify(new ServiceOrderAssignedNotification($order));
+            }
         });
 
         static::updating(function (ServiceOrder $order): void {
@@ -203,6 +210,12 @@ class ServiceOrder extends Model
                         'user_id' => $actor->id,
                     ]);
                 }
+            }
+
+            // Notify the technician when work is finished so they know
+            // the order is ready for data entry / certificate generation.
+            if ($status === 'trabajo_terminado' && $order->tecnico_user_id && $order->tecnico_user_id !== $actor->id) {
+                $order->tecnico?->notify(new ServiceOrderFinishedNotification($order));
             }
         });
 

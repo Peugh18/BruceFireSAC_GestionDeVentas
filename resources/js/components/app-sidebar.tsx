@@ -27,7 +27,7 @@ export function AppSidebar() {
 
     const items: NavItem[] = [
         {
-            title: 'Dashboard',
+            title: 'Panel',
             url: '/dashboard',
             icon: LayoutGrid,
         },

@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Notifications\DeficiencyAuthorizedNotification;
+use App\Notifications\DeficiencyPendingAuthorizationNotification;
 use Database\Factories\DeficiencyFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -154,5 +156,25 @@ class Deficiency extends Model
 
             $this->update($updates);
         });
+
+        // Notifications dispatched outside the transaction so they only fire
+        // after the state change is committed.
+        if ($newStatus === 'esperando_autorizacion') {
+            // Notify every user who holds the deficiencies.authorize permission.
+            User::permission('deficiencies.authorize')->each(
+                fn (User $u) => $u->notify(new DeficiencyPendingAuthorizationNotification($this))
+            );
+        }
+
+        if ($newStatus === 'autorizada') {
+            // Notify the technician assigned to the service order so they
+            // can proceed with the correction.
+            $this->loadMissing('serviceOrder.tecnico');
+            $tecnico = $this->serviceOrder?->tecnico;
+
+            if ($tecnico && $tecnico->id !== $actor->id) {
+                $tecnico->notify(new DeficiencyAuthorizedNotification($this));
+            }
+        }
     }
 }
