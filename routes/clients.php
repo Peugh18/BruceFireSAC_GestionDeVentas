@@ -27,6 +27,7 @@ Route::middleware(['auth'])->group(function () {
     });
 
     Route::middleware('permission:clients.view')->group(function () {
+        Route::get('clients/search', [ClientController::class, 'search'])->name('clients.search');
         Route::get('clients/{client}', [ClientController::class, 'show'])->name('clients.show');
     });
 });

@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreQuoteRequest;
 use App\Http\Requests\UpdateQuoteRequest;
 use App\Models\CatalogItem;
-use App\Models\Client;
 use App\Models\Quote;
 use App\Models\Sale;
 use Illuminate\Http\RedirectResponse;
@@ -57,19 +56,12 @@ class QuoteController extends Controller
     {
         $this->authorize('create', Quote::class);
 
-        $clients = Client::query()
-            ->where('activo', true)
-            ->with(['sites' => fn ($q) => $q->where('activo', true), 'vehicles' => fn ($q) => $q->where('activo', true)])
-            ->orderBy('razon_social')
-            ->get();
-
         $catalogItems = CatalogItem::query()
             ->where('activo', true)
             ->orderBy('nombre')
             ->get();
 
         return Inertia::render('quotes/create', [
-            'clients' => $clients,
             'catalogItems' => $catalogItems,
         ]);
     }

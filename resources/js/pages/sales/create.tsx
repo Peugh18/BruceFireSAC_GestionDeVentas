@@ -1,3 +1,4 @@
+import { ClientSearchCombobox } from '@/components/client-search-combobox';
 import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
@@ -13,12 +14,21 @@ import { type CatalogItem } from '@/types/catalog';
 import { type FormaPago } from '@/types/sale';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
-import { FormEventHandler, useMemo } from 'react';
+import { FormEventHandler, useMemo, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Ventas', href: route('sales.index') },
     { title: 'Nueva venta', href: route('sales.create') },
 ];
+
+// Plazo options in days for credit installments.
+const PLAZOS = [
+    { label: '15 días', days: 15 },
+    { label: '30 días', days: 30 },
+    { label: '45 días', days: 45 },
+    { label: '60 días', days: 60 },
+    { label: 'Personalizado', days: 0 },
+] as const;
 
 interface FormSaleItem {
     catalog_item_id: number;
@@ -52,14 +62,15 @@ interface SaleFormState {
     installments: FormInstallment[];
 }
 
-export default function SaleCreate({
-    clients,
-    catalogItems,
-}: {
-    clients: Client[];
-    catalogItems: CatalogItem[];
-}) {
+export default function SaleCreate({ catalogItems }: { catalogItems: CatalogItem[] }) {
     const today = new Date().toISOString().split('T')[0];
+
+    // selectedClient is managed locally so combobox can pass the full object
+    // (with sites/vehicles) directly without an extra fetch.
+    const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+    // plazo state: 0 = custom (user edits dates manually)
+    const [plazo, setPlazo] = useState<number>(30);
+    const [customPlazo, setCustomPlazo] = useState<number>(30);
 
     const { data, setData, post, processing, errors } = useForm<SaleFormState>({
         client_id: '',
@@ -73,12 +84,18 @@ export default function SaleCreate({
         installments: [],
     });
 
-    const selectedClient = useMemo(() => {
-        return clients.find((c) => c.id === Number(data.client_id));
-    }, [clients, data.client_id]);
-
     const availableSites = selectedClient?.sites ?? [];
     const availableVehicles = selectedClient?.vehicles ?? [];
+
+    const handleClientSelect = (client: Client) => {
+        setSelectedClient(client);
+        setData((prev) => ({
+            ...prev,
+            client_id: client.id,
+            client_site_id: '',
+            vehicle_id: '',
+        }));
+    };
 
     const addItem = () => {
         if (catalogItems.length === 0) return;
@@ -123,16 +140,22 @@ export default function SaleCreate({
         return { subtotal: subtotalSum, igv, total };
     }, [data.items]);
 
-    const generateInstallments = (numCuotas: number) => {
+    /**
+     * Generate installments distributed evenly across `numCuotas` payments,
+     * each due `dias` days after the previous one (first due = fechaBase + dias).
+     */
+    const generateInstallments = (numCuotas: number, dias: number) => {
         if (numCuotas <= 0) {
             setData('installments', []);
             return;
         }
+        const effectiveDias = dias > 0 ? dias : customPlazo > 0 ? customPlazo : 30;
         const montoPorCuota = Math.round((totals.total / numCuotas) * 100) / 100;
         const list: FormInstallment[] = [];
+        const base = new Date(data.fecha || today);
         for (let i = 1; i <= numCuotas; i++) {
-            const date = new Date();
-            date.setDate(date.getDate() + i * 30);
+            const date = new Date(base);
+            date.setDate(date.getDate() + i * effectiveDias);
             list.push({
                 numero_cuota: i,
                 monto: i === numCuotas ? Math.round((totals.total - montoPorCuota * (numCuotas - 1)) * 100) / 100 : montoPorCuota,
@@ -140,6 +163,20 @@ export default function SaleCreate({
             });
         }
         setData('installments', list);
+    };
+
+    const handlePlazoChange = (dias: number) => {
+        setPlazo(dias);
+        if (dias > 0 && data.installments.length > 0) {
+            generateInstallments(data.installments.length, dias);
+        }
+    };
+
+    const handleCustomPlazoChange = (dias: number) => {
+        setCustomPlazo(dias);
+        if (data.installments.length > 0) {
+            generateInstallments(data.installments.length, dias);
+        }
     };
 
     const submit: FormEventHandler = (e) => {
@@ -176,28 +213,12 @@ export default function SaleCreate({
                         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                             <div className="space-y-2">
                                 <Label htmlFor="client_id">Cliente *</Label>
-                                <Select
-                                    value={data.client_id ? String(data.client_id) : ''}
-                                    onValueChange={(val) => {
-                                        setData((prev) => ({
-                                            ...prev,
-                                            client_id: val,
-                                            client_site_id: '',
-                                            vehicle_id: '',
-                                        }));
-                                    }}
-                                >
-                                    <SelectTrigger id="client_id">
-                                        <SelectValue placeholder="Selecciona un cliente" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {clients.map((c) => (
-                                            <SelectItem key={c.id} value={String(c.id)}>
-                                                {c.razon_social} ({c.numero_documento})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <ClientSearchCombobox
+                                    id="client_id"
+                                    value={data.client_id}
+                                    onSelect={handleClientSelect}
+                                    placeholder="Buscar cliente..."
+                                />
                                 <InputError message={errors.client_id} />
                             </div>
 
@@ -261,7 +282,7 @@ export default function SaleCreate({
                                     onValueChange={(val: 'contado' | 'credito') => {
                                         setData('condicion_pago', val);
                                         if (val === 'credito') {
-                                            generateInstallments(2);
+                                            generateInstallments(1, plazo);
                                         }
                                     }}
                                 >
@@ -369,9 +390,7 @@ export default function SaleCreate({
                                                             onChange={(e) => updateItem(index, 'descuento', parseFloat(e.target.value) || 0)}
                                                         />
                                                     </TableCell>
-                                                    <TableCell className="text-right font-medium">
-                                                        S/ {itemSubtotal.toFixed(2)}
-                                                    </TableCell>
+                                                    <TableCell className="text-right font-medium">S/ {itemSubtotal.toFixed(2)}</TableCell>
                                                     <TableCell>
                                                         <Button
                                                             type="button"
@@ -456,18 +475,49 @@ export default function SaleCreate({
                         </Card>
                     ) : (
                         <Card>
-                            <CardHeader className="flex flex-row items-center justify-between">
+                            <CardHeader className="flex flex-row items-center justify-between gap-4">
                                 <CardTitle>Cronograma de Cuotas (Crédito)</CardTitle>
-                                <div className="flex items-center gap-2">
-                                    <Label className="text-xs">Número de Cuotas:</Label>
-                                    <Input
-                                        type="number"
-                                        min="1"
-                                        max="24"
-                                        className="w-20"
-                                        value={data.installments.length}
-                                        onChange={(e) => generateInstallments(parseInt(e.target.value) || 1)}
-                                    />
+                                <div className="flex items-center gap-3 flex-wrap justify-end">
+                                    <div className="flex items-center gap-2">
+                                        <Label className="text-xs shrink-0">Plazo:</Label>
+                                        <Select
+                                            value={String(plazo)}
+                                            onValueChange={(val) => handlePlazoChange(Number(val))}
+                                        >
+                                            <SelectTrigger className="w-36">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {PLAZOS.map((p) => (
+                                                    <SelectItem key={p.days} value={String(p.days)}>
+                                                        {p.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {plazo === 0 && (
+                                            <Input
+                                                type="number"
+                                                min="1"
+                                                max="365"
+                                                className="w-20"
+                                                placeholder="días"
+                                                value={customPlazo}
+                                                onChange={(e) => handleCustomPlazoChange(parseInt(e.target.value) || 30)}
+                                            />
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Label className="text-xs shrink-0">Número de Cuotas:</Label>
+                                        <Input
+                                            type="number"
+                                            min="1"
+                                            max="24"
+                                            className="w-20"
+                                            value={data.installments.length || 1}
+                                            onChange={(e) => generateInstallments(parseInt(e.target.value) || 1, plazo)}
+                                        />
+                                    </div>
                                 </div>
                             </CardHeader>
                             <CardContent>

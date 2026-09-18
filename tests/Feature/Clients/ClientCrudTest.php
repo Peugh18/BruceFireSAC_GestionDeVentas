@@ -197,3 +197,39 @@ test('a user with clients.update can register a vehicle for a client', function 
 
     expect($client->vehicles()->count())->toBe(1);
 });
+
+test('clients search endpoint returns max 20 matches by razon_social or numero_documento with sites and vehicles', function () {
+    $user = userWithRole('Vendedor');
+
+    $target = Client::factory()->create([
+        'razon_social' => 'Servicios Metalurgicos SAC',
+        'numero_documento' => '20123456789',
+        'activo' => true,
+    ]);
+    ClientSite::factory()->create(['client_id' => $target->id, 'activo' => true]);
+    Vehicle::factory()->create(['client_id' => $target->id, 'activo' => true]);
+
+    Client::factory()->create([
+        'razon_social' => 'Empresa Otra SAC',
+        'numero_documento' => '20999999999',
+        'activo' => true,
+    ]);
+
+    $response = $this->actingAs($user)
+        ->getJson(route('clients.search', ['q' => 'Metalurgicos']))
+        ->assertOk();
+
+    $data = $response->json();
+    expect($data)->toHaveCount(1);
+    expect($data[0]['id'])->toBe($target->id);
+    expect($data[0]['sites'])->toHaveCount(1);
+    expect($data[0]['vehicles'])->toHaveCount(1);
+
+    // Search by document number
+    $responseDoc = $this->actingAs($user)
+        ->getJson(route('clients.search', ['q' => '20123456789']))
+        ->assertOk();
+
+    expect($responseDoc->json())->toHaveCount(1);
+    expect($responseDoc->json()[0]['id'])->toBe($target->id);
+});

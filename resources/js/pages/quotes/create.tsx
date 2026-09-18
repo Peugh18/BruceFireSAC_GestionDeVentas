@@ -1,3 +1,4 @@
+import { ClientSearchCombobox } from '@/components/client-search-combobox';
 import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
@@ -12,7 +13,7 @@ import { type BreadcrumbItem, type Client, type ClientSite, type Vehicle } from 
 import { type CatalogItem } from '@/types/catalog';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
-import { FormEventHandler, useMemo } from 'react';
+import { FormEventHandler, useMemo, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Cotizaciones', href: route('quotes.index') },
@@ -39,14 +40,16 @@ interface QuoteFormState {
 }
 
 export default function QuoteCreate({
-    clients,
+    clients = [],
     catalogItems,
 }: {
-    clients: Client[];
+    clients?: Client[];
     catalogItems: CatalogItem[];
 }) {
     const today = new Date().toISOString().split('T')[0];
     const validityDefault = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
     const { data, setData, post, processing, errors } = useForm<QuoteFormState>({
         client_id: '',
@@ -59,12 +62,18 @@ export default function QuoteCreate({
         items: [],
     });
 
-    const selectedClient = useMemo(() => {
-        return clients.find((c) => c.id === Number(data.client_id));
-    }, [clients, data.client_id]);
-
     const availableSites = selectedClient?.sites ?? [];
     const availableVehicles = selectedClient?.vehicles ?? [];
+
+    const handleClientSelect = (client: Client) => {
+        setSelectedClient(client);
+        setData((prev) => ({
+            ...prev,
+            client_id: client.id,
+            client_site_id: '',
+            vehicle_id: '',
+        }));
+    };
 
     const addItem = () => {
         if (catalogItems.length === 0) return;
@@ -136,28 +145,12 @@ export default function QuoteCreate({
                         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                             <div className="space-y-2">
                                 <Label htmlFor="client_id">Cliente *</Label>
-                                <Select
-                                    value={data.client_id ? String(data.client_id) : ''}
-                                    onValueChange={(val) => {
-                                        setData((prev) => ({
-                                            ...prev,
-                                            client_id: val,
-                                            client_site_id: '',
-                                            vehicle_id: '',
-                                        }));
-                                    }}
-                                >
-                                    <SelectTrigger id="client_id">
-                                        <SelectValue placeholder="Selecciona un cliente" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {clients.map((c) => (
-                                            <SelectItem key={c.id} value={String(c.id)}>
-                                                {c.razon_social} ({c.numero_documento})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <ClientSearchCombobox
+                                    id="client_id"
+                                    value={data.client_id}
+                                    onSelect={handleClientSelect}
+                                    placeholder="Buscar cliente..."
+                                />
                                 <InputError message={errors.client_id} />
                             </div>
 

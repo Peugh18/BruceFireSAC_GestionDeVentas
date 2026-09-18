@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreSaleRequest;
 use App\Models\CatalogItem;
-use App\Models\Client;
 use App\Models\CreditDebitNote;
 use App\Models\ElectronicDocument;
 use App\Models\Sale;
@@ -57,19 +56,12 @@ class SaleController extends Controller
     {
         $this->authorize('create', Sale::class);
 
-        $clients = Client::query()
-            ->where('activo', true)
-            ->with(['sites' => fn ($q) => $q->where('activo', true), 'vehicles' => fn ($q) => $q->where('activo', true)])
-            ->orderBy('razon_social')
-            ->get();
-
         $catalogItems = CatalogItem::query()
             ->where('activo', true)
             ->orderBy('nombre')
             ->get();
 
         return Inertia::render('sales/create', [
-            'clients' => $clients,
             'catalogItems' => $catalogItems,
         ]);
     }
@@ -181,6 +173,11 @@ class SaleController extends Controller
             'noteMotivoLabels' => [
                 'nota_credito' => CreditDebitNote::MOTIVO_CREDITO_LABELS,
                 'nota_debito' => CreditDebitNote::MOTIVO_DEBITO_LABELS,
+            ],
+            'company' => [
+                'ruc' => config('billing.sunat.ruc'),
+                'razon_social' => config('billing.sunat.razon_social'),
+                'nombre_comercial' => config('billing.sunat.nombre_comercial'),
             ],
         ]);
     }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\ClientStoreRequest;
 use App\Http\Requests\ClientUpdateRequest;
 use App\Models\Client;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -100,5 +101,37 @@ class ClientController extends Controller
         $client->update($request->validated());
 
         return to_route('clients.show', $client)->with('status', 'Cliente actualizado correctamente.');
+    }
+
+    /**
+     * Lightweight search for the client combobox.
+     * Returns max 20 active clients matching razon_social or numero_documento,
+     * including their active sites and vehicles for immediate use in forms.
+     */
+    public function search(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', Client::class);
+
+        $q = $request->string('q')->trim()->toString();
+
+        $clients = Client::query()
+            ->where('activo', true)
+            ->when($q !== '', function ($query) use ($q) {
+                $query->where(function ($sub) use ($q) {
+                    $sub->where('razon_social', 'like', "%{$q}%")
+                        ->orWhere('numero_documento', 'like', "%{$q}%")
+                        ->orWhere('nombre_comercial', 'like', "%{$q}%");
+                });
+            })
+            ->with([
+                'sites' => fn ($q) => $q->where('activo', true)->select(['id', 'client_id', 'nombre', 'direccion', 'tipo']),
+                'vehicles' => fn ($q) => $q->where('activo', true)->select(['id', 'client_id', 'placa', 'marca', 'modelo']),
+            ])
+            ->select(['id', 'razon_social', 'nombre_comercial', 'numero_documento', 'tipo_documento'])
+            ->orderBy('razon_social')
+            ->limit(20)
+            ->get();
+
+        return response()->json($clients);
     }
 }
