@@ -86,7 +86,7 @@ test('a user with clients.create can create a client with an auto-generated code
 });
 
 test('a user without clients.create cannot create a client', function () {
-    $user = userWithRole('Gerente');
+    $user = userWithRole('Almacén');
 
     $this->actingAs($user)
         ->post(route('clients.store'), [
@@ -138,7 +138,7 @@ test('a user with clients.update can update a client', function () {
 });
 
 test('a user without clients.update cannot update a client', function () {
-    $user = userWithRole('Gerente');
+    $user = userWithRole('Almacén');
     $client = Client::factory()->create();
 
     $this->actingAs($user)

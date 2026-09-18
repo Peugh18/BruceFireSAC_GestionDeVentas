@@ -17,7 +17,7 @@ class CatalogPermissionsSeeder extends Seeder
             Permission::findOrCreate($permission, 'web');
         }
 
-        foreach (['Gerente', 'Administrador', 'Vendedor', 'Almacén'] as $roleName) {
+        foreach (['Gerente', 'Vendedor', 'Almacén'] as $roleName) {
             $role = Role::where('name', $roleName)->where('guard_name', 'web')->first();
 
             if (! $role) {
@@ -26,7 +26,7 @@ class CatalogPermissionsSeeder extends Seeder
 
             $role->givePermissionTo('catalog.view');
 
-            if (in_array($roleName, ['Gerente', 'Administrador'], true)) {
+            if ($roleName === 'Gerente') {
                 $role->givePermissionTo(['catalog.create', 'catalog.update']);
             }
         }

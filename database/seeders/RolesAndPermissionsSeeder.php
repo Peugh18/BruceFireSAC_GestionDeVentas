@@ -35,18 +35,10 @@ class RolesAndPermissionsSeeder extends Seeder
      * @var array<string, list<string>>
      */
     private const ROLE_PERMISSIONS = [
-        'Gerente' => [
-            'clients.view',
-            'quotes.view',
-            'sales.view',
-            'inventory.view',
-            'service_orders.view',
-            'certificates.view',
-            'billing.view',
-            'collections.view',
-            'reports.view',
-            'audit.view',
-        ],
+        // Gerente = rol unico de administracion general: tiene TODOS los permisos
+        // base definidos arriba, mas (via GerenteFullAccessSeeder, al final de
+        // DatabaseSeeder) los que agreguen los seeders de cada modulo.
+        'Gerente' => self::PERMISSIONS,
         'Vendedor' => [
             'clients.view', 'clients.create', 'clients.update',
             'quotes.view', 'quotes.create', 'quotes.update', 'quotes.convert',
@@ -69,9 +61,6 @@ class RolesAndPermissionsSeeder extends Seeder
             'service_orders.view', 'service_orders.execute', 'service_orders.close',
             'deficiencies.create', 'deficiencies.resolve',
         ],
-        'Administrador' => [
-            'users.manage', 'roles.manage', 'settings.manage', 'audit.view',
-        ],
     ];
 
     /**
@@ -89,5 +78,22 @@ class RolesAndPermissionsSeeder extends Seeder
             $role = Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
             $role->syncPermissions($permissions);
         }
+
+        $this->mergeAdministradorIntoGerente();
+    }
+
+    /**
+     * Gerente absorbe al rol Administrador: reasigna a sus usuarios y lo elimina.
+     */
+    private function mergeAdministradorIntoGerente(): void
+    {
+        $administrador = Role::where('name', 'Administrador')->first();
+
+        if (! $administrador) {
+            return;
+        }
+
+        $administrador->users()->get()->each(fn ($user) => $user->assignRole('Gerente'));
+        $administrador->delete();
     }
 }

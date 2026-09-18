@@ -38,7 +38,7 @@ class UpdateUserRequest extends FormRequest
     }
 
     /**
-     * Prevent deactivating or reassigning the last active Administrador,
+     * Prevent deactivating or reassigning the last active Gerente,
      * which would leave the system with nobody able to manage it.
      */
     public function withValidator(Validator $validator): void
@@ -47,11 +47,11 @@ class UpdateUserRequest extends FormRequest
             /** @var User|null $target */
             $target = $this->route('user');
 
-            if (! $target instanceof User || ! $target->hasRole('Administrador')) {
+            if (! $target instanceof User || ! $target->hasRole('Gerente')) {
                 return;
             }
 
-            $remainingActiveAdmins = User::role('Administrador')
+            $remainingActiveAdmins = User::role('Gerente')
                 ->where('activo', true)
                 ->where('id', '!=', $target->id)
                 ->count();
@@ -61,11 +61,11 @@ class UpdateUserRequest extends FormRequest
             }
 
             if (! $this->boolean('activo')) {
-                $validator->errors()->add('activo', 'No puedes desactivar al unico administrador activo del sistema.');
+                $validator->errors()->add('activo', 'No puedes desactivar al unico Gerente activo del sistema.');
             }
 
-            if ($this->string('role')->toString() !== 'Administrador') {
-                $validator->errors()->add('role', 'No puedes quitarle el rol de Administrador al unico administrador activo del sistema.');
+            if ($this->string('role')->toString() !== 'Gerente') {
+                $validator->errors()->add('role', 'No puedes quitarle el rol de Gerente al unico Gerente activo del sistema.');
             }
         });
     }

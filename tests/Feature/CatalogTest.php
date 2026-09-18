@@ -239,7 +239,7 @@ test('catalog returns not found for missing records', function () {
 
 test('catalog permissions seeder is additive and idempotent', function () {
     $this->seed(RolesAndPermissionsSeeder::class);
-    $role = Role::findByName('Administrador');
+    $role = Role::findByName('Gerente');
     $originalPermissions = $role->permissions->pluck('name')->all();
 
     $this->seed(CatalogPermissionsSeeder::class);

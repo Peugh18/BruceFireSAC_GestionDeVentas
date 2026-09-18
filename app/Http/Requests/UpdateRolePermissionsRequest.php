@@ -32,7 +32,7 @@ class UpdateRolePermissionsRequest extends FormRequest
     }
 
     /**
-     * The Administrador role is the only source of users.manage/roles.manage
+     * The Gerente role is the only source of users.manage/roles.manage
      * in the seeded system: stripping either would leave nobody able to
      * administer users, roles or permissions.
      */
@@ -42,7 +42,7 @@ class UpdateRolePermissionsRequest extends FormRequest
             /** @var Role|null $role */
             $role = $this->route('role');
 
-            if (! $role instanceof Role || $role->name !== 'Administrador') {
+            if (! $role instanceof Role || $role->name !== 'Gerente') {
                 return;
             }
 
@@ -50,7 +50,7 @@ class UpdateRolePermissionsRequest extends FormRequest
 
             foreach (['users.manage', 'roles.manage'] as $required) {
                 if (! in_array($required, $permissions, true) && Permission::where('name', $required)->exists()) {
-                    $validator->errors()->add('permissions', "No puedes quitarle el permiso \"{$required}\" al rol Administrador: el sistema quedaria sin nadie que pueda administrarlo.");
+                    $validator->errors()->add('permissions', "No puedes quitarle el permiso \"{$required}\" al rol Gerente: el sistema quedaria sin nadie que pueda administrarlo.");
                 }
             }
         });

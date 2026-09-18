@@ -30,7 +30,6 @@ class BillingPermissionsSeeder extends Seeder
         $rolesPermissions = [
             'Gerente' => ['billing.issue', 'billing.retry'],
             'Vendedor' => ['billing.issue', 'billing.retry'],
-            'Administrador' => $permissions,
         ];
 
         foreach ($rolesPermissions as $roleName => $rolePerms) {

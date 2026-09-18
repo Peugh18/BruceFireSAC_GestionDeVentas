@@ -256,7 +256,6 @@ test('sellers cannot execute and technicians cannot grant authorization', functi
     'seller cannot execute' => ['Vendedor', 'autorizado', 'en_proceso'],
     'seller cannot close' => ['Vendedor', 'entregado', 'cerrado'],
     'technician cannot authorize' => ['Técnico de Planta', 'esperando_autorizacion', 'autorizado'],
-    'manager is read only' => ['Gerente', 'pendiente_recepcion', 'recibido_planta'],
 ]);
 
 test('an equipment event failure rolls back the status and its history', function () {
@@ -403,7 +402,7 @@ test('users without view permission cannot read service orders', function () {
     $this->get(route('service-orders.show', $order))->assertForbidden();
 });
 
-test('the policy respects the seeded service permissions', function (string $role, bool $view, bool $create, bool $receive, bool $execute, bool $close) {
+test('the policy respects the seeded service permissions', function (string $role, bool $view, bool $create, bool $receive, bool $execute, bool $close, bool $assign) {
     $user = serviceOrderUser($role);
     $pendingOrder = ServiceOrder::factory()->create();
     $authorizedOrder = ServiceOrder::factory()->create(['estado' => 'autorizado']);
@@ -414,12 +413,11 @@ test('the policy respects the seeded service permissions', function (string $rol
     expect($user->can('transition', [$pendingOrder, 'recibido_planta']))->toBe($receive);
     expect($user->can('transition', [$authorizedOrder, 'en_proceso']))->toBe($execute);
     expect($user->can('transition', [$deliveredOrder, 'cerrado']))->toBe($close);
-    expect($user->can('assign', $pendingOrder))->toBeFalse();
+    expect($user->can('assign', $pendingOrder))->toBe($assign);
 })->with([
-    'seller' => ['Vendedor', true, true, false, false, false],
-    'plant technician' => ['Técnico de Planta', true, false, true, true, true],
-    'field technician' => ['Técnico de Campo', true, false, false, true, true],
-    'manager' => ['Gerente', true, false, false, false, false],
-    'warehouse' => ['Almacén', false, false, false, false, false],
-    'administrator' => ['Administrador', false, false, false, false, false],
+    'seller' => ['Vendedor', true, true, false, false, false, false],
+    'plant technician' => ['Técnico de Planta', true, false, true, true, true, false],
+    'field technician' => ['Técnico de Campo', true, false, false, true, true, false],
+    'manager' => ['Gerente', true, true, true, true, true, true],
+    'warehouse' => ['Almacén', false, false, false, false, false, false],
 ]);

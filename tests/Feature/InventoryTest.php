@@ -60,7 +60,7 @@ test('inventory policy respects the existing role matrix', function (string $rol
     expect($user->can('receive', InventoryStock::class))->toBe($write);
     expect($user->can('adjust', InventoryStock::class))->toBe($write);
 })->with([
-    ['Almacén', true, true], ['Gerente', true, false], ['Administrador', false, false],
+    ['Almacén', true, true], ['Gerente', true, true],
     ['Vendedor', false, false], ['Técnico de Planta', false, false], ['Técnico de Campo', false, false],
 ]);
 

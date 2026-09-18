@@ -32,7 +32,6 @@ class PickupPermissionsSeeder extends Seeder
             'Vendedor' => ['pickups.view', 'pickups.create', 'actas.view'],
             'Técnico de Planta' => ['pickups.view', 'pickups.custody', 'actas.view'],
             'Técnico de Campo' => ['pickups.view', 'pickups.create', 'pickups.custody', 'actas.view'],
-            'Administrador' => $permissions,
         ];
 
         foreach ($rolesPermissions as $roleName => $rolePerms) {

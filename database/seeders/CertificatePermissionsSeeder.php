@@ -31,7 +31,6 @@ class CertificatePermissionsSeeder extends Seeder
             'Vendedor' => ['certificates.view'],
             'Técnico de Planta' => ['certificates.view', 'certificates.issue'],
             'Técnico de Campo' => ['certificates.view', 'certificates.issue'],
-            'Administrador' => $permissions,
         ];
 
         foreach ($rolesPermissions as $roleName => $rolePerms) {

@@ -284,16 +284,16 @@ test('pending and overdue document filters use dates rather than stored overdue 
         ->assertInertia(fn (Assert $page) => $page->has('sales.data', 1)->where('sales.data.0.id', $match->sale_id));
 })->with([['pendiente', '2026-09-20'], ['vencida', '2026-09-17']]);
 
-test('seeded roles retain their collection permissions', function (string $role, bool $canView) {
+test('seeded roles retain their collection permissions', function (string $role, bool $canView, bool $canRegister) {
     $user = User::factory()->create();
     $user->assignRole($role);
     $installment = collectionInstallment();
 
     expect($user->can('viewAny', SaleInstallment::class))->toBe($canView);
-    expect($user->can('registerPayment', $installment))->toBeFalse();
+    expect($user->can('registerPayment', $installment))->toBe($canRegister);
 })->with([
-    ['Vendedor', true], ['Gerente', true], ['Técnico de Planta', false],
-    ['Técnico de Campo', false], ['Almacén', false], ['Administrador', false],
+    ['Vendedor', true, false], ['Gerente', true, true], ['Técnico de Planta', false, false],
+    ['Técnico de Campo', false, false], ['Almacén', false, false],
 ]);
 
 test('viewers can consult but cannot register payments without the specific permission', function () {

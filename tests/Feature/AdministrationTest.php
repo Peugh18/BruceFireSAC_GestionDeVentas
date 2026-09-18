@@ -19,10 +19,10 @@ function ensureRole(string $name, array $permissions = []): Role
 
 function adminUser(): User
 {
-    ensureRole('Administrador', ['users.manage', 'roles.manage']);
+    ensureRole('Gerente', ['users.manage', 'roles.manage']);
 
     $user = User::factory()->create(['activo' => true]);
-    $user->assignRole('Administrador');
+    $user->assignRole('Gerente');
 
     return $user;
 }
@@ -41,20 +41,14 @@ test('user without users.manage or roles.manage is forbidden', function () {
     $this->actingAs($user)->get(route('administration.roles.index'))->assertForbidden();
 });
 
-test('only administrador role can access administration routes', function () {
-    ensureRole('Administrador', ['users.manage', 'roles.manage']);
-    ensureRole('Gerente', ['clients.view']);
+test('only gerente role can access administration routes', function () {
     ensureRole('Vendedor', ['clients.view']);
-
-    $gerente = User::factory()->create();
-    $gerente->assignRole('Gerente');
 
     $vendedor = User::factory()->create();
     $vendedor->assignRole('Vendedor');
 
     $admin = adminUser();
 
-    $this->actingAs($gerente)->get(route('administration.users.index'))->assertForbidden();
     $this->actingAs($vendedor)->get(route('administration.users.index'))->assertForbidden();
     $this->actingAs($admin)->get(route('administration.users.index'))->assertOk();
 });
@@ -117,20 +111,20 @@ test('admin can edit a user role and active status', function () {
     expect($user->hasRole('Vendedor'))->toBeFalse();
 });
 
-test('cannot deactivate the only active administrador', function () {
+test('cannot deactivate the only active gerente', function () {
     $admin = adminUser();
 
     $this->actingAs($admin)->put(route('administration.users.update', $admin->id), [
         'name' => $admin->name,
         'email' => $admin->email,
-        'role' => 'Administrador',
+        'role' => 'Gerente',
         'activo' => false,
     ])->assertSessionHasErrors('activo');
 
     expect($admin->fresh()->activo)->toBeTrue();
 });
 
-test('cannot reassign the role of the only active administrador', function () {
+test('cannot reassign the role of the only active gerente', function () {
     $admin = adminUser();
     ensureRole('Vendedor', ['clients.view']);
 
@@ -141,18 +135,18 @@ test('cannot reassign the role of the only active administrador', function () {
         'activo' => true,
     ])->assertSessionHasErrors('role');
 
-    expect($admin->fresh()->hasRole('Administrador'))->toBeTrue();
+    expect($admin->fresh()->hasRole('Gerente'))->toBeTrue();
 });
 
-test('can deactivate an administrador when another active administrador remains', function () {
+test('can deactivate a gerente when another active gerente remains', function () {
     $adminOne = adminUser();
     $adminTwo = User::factory()->create(['activo' => true]);
-    $adminTwo->assignRole('Administrador');
+    $adminTwo->assignRole('Gerente');
 
     $this->actingAs($adminOne)->put(route('administration.users.update', $adminTwo->id), [
         'name' => $adminTwo->name,
         'email' => $adminTwo->email,
-        'role' => 'Administrador',
+        'role' => 'Gerente',
         'activo' => false,
     ])->assertRedirect();
 
@@ -177,9 +171,9 @@ test('editing a role permissions is reflected in user abilities', function () {
     expect($vendedor->fresh()->can('quotes.create'))->toBeTrue();
 });
 
-test('cannot strip users.manage or roles.manage from administrador role', function () {
+test('cannot strip users.manage or roles.manage from gerente role', function () {
     $admin = adminUser();
-    $role = Role::where('name', 'Administrador')->firstOrFail();
+    $role = Role::where('name', 'Gerente')->firstOrFail();
 
     $this->actingAs($admin)->put(route('administration.roles.update', $role->id), [
         'permissions' => ['roles.manage'],

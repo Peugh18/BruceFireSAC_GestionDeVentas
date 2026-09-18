@@ -38,7 +38,7 @@ export default function AdministrationRoleShow({
         { title: role.name, href: route('administration.roles.show', role.id) },
     ];
 
-    const isAdminRole = role.name === 'Administrador';
+    const isAdminRole = role.name === 'Gerente';
 
     const { data, setData, put, processing, errors } = useForm({
         permissions: rolePermissions,

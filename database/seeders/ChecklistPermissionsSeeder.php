@@ -34,7 +34,6 @@ class ChecklistPermissionsSeeder extends Seeder
             'Vendedor' => ['checklists.view', 'deficiencies.view', 'deficiencies.create', 'deficiencies.authorize'],
             'Técnico de Planta' => ['checklists.view', 'checklists.fill', 'deficiencies.view', 'deficiencies.create', 'deficiencies.resolve'],
             'Técnico de Campo' => ['checklists.view', 'checklists.fill', 'deficiencies.view', 'deficiencies.create', 'deficiencies.resolve'],
-            'Administrador' => $permissions,
         ];
 
         foreach ($rolesPermissions as $roleName => $rolePerms) {
