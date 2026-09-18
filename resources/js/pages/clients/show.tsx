@@ -7,7 +7,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Client, type SharedData } from '@/types';
+import { estadoEquipoLabels, type Equipment } from '@/types/equipment';
 import { Head, Link, usePage } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 
 const TIPO_DOCUMENTO_LABEL: Record<string, string> = {
     dni: 'DNI',
@@ -35,9 +37,92 @@ function InfoRow({ label, value }: { label: string; value: string | null }) {
     );
 }
 
+function ClientEquipmentTab({ client, canCreateEquipment }: { client: Client; canCreateEquipment: boolean }) {
+    const [equipment, setEquipment] = useState<Equipment[] | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        fetch(route('clients.equipment.index', client.id), { headers: { Accept: 'application/json' } })
+            .then((response) => response.json())
+            .then((payload: { data: Equipment[] }) => {
+                if (!cancelled) {
+                    setEquipment(payload.data);
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setLoading(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [client.id]);
+
+    return (
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <CardTitle>Equipos</CardTitle>
+                {canCreateEquipment && (
+                    <Button asChild size="sm">
+                        <Link href={route('equipment.create', { client_id: client.id })}>Nuevo equipo</Link>
+                    </Button>
+                )}
+            </CardHeader>
+            <CardContent>
+                {loading && <p className="text-sm text-muted-foreground">Cargando equipos...</p>}
+
+                {!loading && (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Codigo</TableHead>
+                                <TableHead>Tipo</TableHead>
+                                <TableHead>Marca</TableHead>
+                                <TableHead>Estado</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {(equipment ?? []).length === 0 && (
+                                <TableRow>
+                                    <TableCell colSpan={4} className="text-center text-muted-foreground">
+                                        Este cliente aun no tiene equipos registrados.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+
+                            {(equipment ?? []).map((item) => (
+                                <TableRow key={item.id}>
+                                    <TableCell className="font-medium">
+                                        <Link href={route('equipment.show', item.id)} className="hover:underline">
+                                            {item.codigo}
+                                        </Link>
+                                    </TableCell>
+                                    <TableCell>{item.tipo_equipo}</TableCell>
+                                    <TableCell>{item.marca ?? '-'}</TableCell>
+                                    <TableCell>
+                                        <Badge variant={item.estado === 'activo' ? 'default' : 'secondary'}>
+                                            {estadoEquipoLabels[item.estado]}
+                                        </Badge>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
 export default function ClientsShow({ client }: { client: Client }) {
     const { auth } = usePage<SharedData>().props;
     const canUpdate = auth.permissions.includes('clients.update');
+    const canViewEquipment = auth.permissions.includes('equipment.view');
+    const canCreateEquipment = auth.permissions.includes('equipment.create');
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Clientes', href: '/clients' },
@@ -224,7 +309,19 @@ export default function ClientsShow({ client }: { client: Client }) {
                         </Card>
                     </TabsContent>
 
-                    {['equipos', 'cotizaciones', 'ventas', 'servicios', 'certificados', 'comprobantes', 'cobranzas', 'historial'].map((tab) => (
+                    <TabsContent value="equipos">
+                        {canViewEquipment ? (
+                            <ClientEquipmentTab client={client} canCreateEquipment={canCreateEquipment} />
+                        ) : (
+                            <Card>
+                                <CardContent className="flex min-h-[30vh] items-center justify-center text-sm text-muted-foreground">
+                                    No tienes permisos para ver los equipos de este cliente.
+                                </CardContent>
+                            </Card>
+                        )}
+                    </TabsContent>
+
+                    {['cotizaciones', 'ventas', 'servicios', 'certificados', 'comprobantes', 'cobranzas', 'historial'].map((tab) => (
                         <TabsContent key={tab} value={tab}>
                             <Card>
                                 <CardContent className="flex min-h-[30vh] items-center justify-center text-sm text-muted-foreground">
