@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreDeficiencyRequest;
 use App\Http\Requests\UpdateDeficiencyStatusRequest;
 use App\Models\Deficiency;
+use App\Models\DeficiencyAuthorization;
+use App\Models\Quote;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -23,7 +25,7 @@ class DeficiencyController extends Controller
         $estado = $request->string('estado')->toString();
 
         $deficiencies = Deficiency::query()
-            ->with(['serviceOrder.client', 'equipment', 'catalogItem', 'resueltoPorUser'])
+            ->with(['serviceOrder.client', 'equipment', 'catalogItem', 'resueltoPorUser', 'authorizations.quote'])
             ->when($search !== '', function ($query) use ($search) {
                 $query->where('componente', 'like', "%{$search}%")
                     ->orWhereHas('serviceOrder', function ($q) use ($search) {
@@ -42,6 +44,12 @@ class DeficiencyController extends Controller
         return Inertia::render('deficiencies/index', [
             'deficiencies' => $deficiencies,
             'statusLabels' => Deficiency::STATUS_LABELS,
+            'canalLabels' => DeficiencyAuthorization::CANAL_LABELS,
+            'quotes' => Quote::query()
+                ->select(['id', 'numero', 'client_id'])
+                ->orderByDesc('id')
+                ->limit(200)
+                ->get(),
             'filters' => [
                 'search' => $search,
                 'estado' => $estado,

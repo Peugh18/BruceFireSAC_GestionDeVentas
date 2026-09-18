@@ -11,12 +11,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated, type SharedData } from '@/types';
-import { type DeficiencyData, type DeficiencyEstado } from '@/types/deficiency';
+import { type DeficiencyAuthorizationCanal, type DeficiencyData, type DeficiencyEstado } from '@/types/deficiency';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { AlertTriangle, CheckCircle2, Search, Wrench } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Search, ShieldCheck, Wrench } from 'lucide-react';
 import { FormEventHandler, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Deficiencias Técnicas', href: route('deficiencies.index') }];
+
+interface QuoteOption {
+    id: number;
+    numero: string;
+    client_id: number;
+}
 
 const ESTADO_BADGE_VARIANT: Record<DeficiencyEstado, 'default' | 'secondary' | 'destructive' | 'outline'> = {
     detectada: 'outline',
@@ -27,23 +33,31 @@ const ESTADO_BADGE_VARIANT: Record<DeficiencyEstado, 'default' | 'secondary' | '
     resuelta: 'default',
 };
 
+// "autorizada" is reached exclusively through the "Autorizar adicional" dialog below,
+// which records who authorized it (client), the channel and the linked quote.
 const NEXT_STATUS_OPTIONS: Record<DeficiencyEstado, DeficiencyEstado[]> = {
-    detectada: ['esperando_autorizacion', 'autorizada', 'rechazada'],
-    esperando_autorizacion: ['autorizada', 'rechazada'],
+    detectada: ['esperando_autorizacion', 'rechazada'],
+    esperando_autorizacion: ['rechazada'],
     autorizada: ['en_correccion', 'resuelta'],
     rechazada: [],
     en_correccion: ['resuelta'],
     resuelta: [],
 };
 
+const CANAL_OPTIONS: DeficiencyAuthorizationCanal[] = ['whatsapp', 'presencial'];
+
 export default function DeficienciesIndex({
     deficiencies,
     statusLabels,
+    canalLabels,
+    quotes,
     filters,
     status,
 }: {
     deficiencies: Paginated<DeficiencyData>;
     statusLabels: Record<string, string>;
+    canalLabels: Record<string, string>;
+    quotes: QuoteOption[];
     filters: { search: string; estado: string };
     status?: string;
 }) {
@@ -54,10 +68,26 @@ export default function DeficienciesIndex({
     const [search, setSearch] = useState(filters.search ?? '');
     const [estado, setEstado] = useState(filters.estado || 'todos');
     const [selectedDeficiency, setSelectedDeficiency] = useState<DeficiencyData | null>(null);
+    const [authorizingDeficiency, setAuthorizingDeficiency] = useState<DeficiencyData | null>(null);
 
     const { data: statusData, setData: setStatusData, patch, processing, errors, reset } = useForm({
         estado: '' as DeficiencyEstado | '',
         resolucion: '',
+    });
+
+    const {
+        data: authData,
+        setData: setAuthData,
+        post: postAuth,
+        processing: authProcessing,
+        errors: authErrors,
+        reset: resetAuth,
+    } = useForm({
+        autorizado_por: '',
+        canal: 'whatsapp' as DeficiencyAuthorizationCanal,
+        fecha: new Date().toISOString().slice(0, 10),
+        observacion: '',
+        quote_id: '' as number | '',
     });
 
     const applyFilters = (nextSearch: string, nextEstado: string) => {
@@ -97,6 +127,34 @@ export default function DeficienciesIndex({
             },
         });
     };
+
+    const openAuthorizeDialog = (deficiency: DeficiencyData) => {
+        setAuthorizingDeficiency(deficiency);
+        resetAuth();
+        setAuthData({
+            autorizado_por: '',
+            canal: 'whatsapp',
+            fecha: new Date().toISOString().slice(0, 10),
+            observacion: '',
+            quote_id: '',
+        });
+    };
+
+    const handleAuthorizeSubmit: FormEventHandler = (e) => {
+        e.preventDefault();
+        if (!authorizingDeficiency) return;
+
+        postAuth(route('deficiencies.authorizations.store', authorizingDeficiency.id), {
+            onSuccess: () => {
+                setAuthorizingDeficiency(null);
+                resetAuth();
+            },
+        });
+    };
+
+    const clientQuotes = authorizingDeficiency?.service_order?.client
+        ? quotes.filter((quote) => quote.client_id === authorizingDeficiency.service_order!.client.id)
+        : [];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -211,11 +269,18 @@ export default function DeficienciesIndex({
                                             <Badge variant={ESTADO_BADGE_VARIANT[def.estado]}>{statusLabels[def.estado] ?? def.estado}</Badge>
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            {nextOptions.length > 0 && (
-                                                <Button size="sm" variant="outline" onClick={() => openStatusDialog(def)}>
-                                                    Cambiar Estado
-                                                </Button>
-                                            )}
+                                            <div className="flex flex-wrap justify-end gap-2">
+                                                {canAuthorize && def.estado === 'esperando_autorizacion' && (
+                                                    <Button size="sm" onClick={() => openAuthorizeDialog(def)}>
+                                                        <ShieldCheck className="size-3.5" /> Autorizar adicional
+                                                    </Button>
+                                                )}
+                                                {nextOptions.length > 0 && (
+                                                    <Button size="sm" variant="outline" onClick={() => openStatusDialog(def)}>
+                                                        Cambiar Estado
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 );
@@ -290,6 +355,123 @@ export default function DeficienciesIndex({
                                 </Button>
                                 <Button type="submit" disabled={processing}>
                                     Guardar Cambio
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
+            )}
+
+            {/* Authorize Additional Dialog */}
+            {authorizingDeficiency && (
+                <Dialog open={Boolean(authorizingDeficiency)} onOpenChange={() => setAuthorizingDeficiency(null)}>
+                    <DialogContent>
+                        <form onSubmit={handleAuthorizeSubmit} className="space-y-4">
+                            <DialogHeader>
+                                <DialogTitle>Autorizar Adicional</DialogTitle>
+                                <DialogDescription>
+                                    Registra la autorización del cliente para el adicional en{' '}
+                                    <span className="font-medium text-foreground capitalize">
+                                        {authorizingDeficiency.componente.replace('_', ' ')}
+                                    </span>{' '}
+                                    ({authorizingDeficiency.equipment?.codigo}). El técnico no negocia precios: esta autorización debe
+                                    provenir del cliente.
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="autorizado-por">Autorizado por (nombre del cliente)</Label>
+                                <Input
+                                    id="autorizado-por"
+                                    value={authData.autorizado_por}
+                                    onChange={(e) => setAuthData('autorizado_por', e.target.value)}
+                                    placeholder="Nombre de quien autoriza"
+                                />
+                                <InputError message={authErrors.autorizado_por} />
+                            </div>
+
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="canal-select">Canal</Label>
+                                    <Select
+                                        value={authData.canal}
+                                        onValueChange={(val: DeficiencyAuthorizationCanal) => setAuthData('canal', val)}
+                                    >
+                                        <SelectTrigger id="canal-select">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {CANAL_OPTIONS.map((canal) => (
+                                                <SelectItem key={canal} value={canal}>
+                                                    {canalLabels[canal] ?? canal}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <InputError message={authErrors.canal} />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="fecha-autorizacion">Fecha</Label>
+                                    <Input
+                                        id="fecha-autorizacion"
+                                        type="date"
+                                        value={authData.fecha}
+                                        onChange={(e) => setAuthData('fecha', e.target.value)}
+                                    />
+                                    <InputError message={authErrors.fecha} />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="quote-select">Cotización del adicional (opcional)</Label>
+                                    <a
+                                        href={route('quotes.create')}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-xs text-primary hover:underline"
+                                    >
+                                        Nueva cotización
+                                    </a>
+                                </div>
+                                <Select
+                                    value={authData.quote_id ? String(authData.quote_id) : 'ninguna'}
+                                    onValueChange={(val) => setAuthData('quote_id', val === 'ninguna' ? '' : Number(val))}
+                                >
+                                    <SelectTrigger id="quote-select">
+                                        <SelectValue placeholder="Sin cotización asociada" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="ninguna">Sin cotización asociada</SelectItem>
+                                        {clientQuotes.map((quote) => (
+                                            <SelectItem key={quote.id} value={String(quote.id)}>
+                                                {quote.numero}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <InputError message={authErrors.quote_id} />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="observacion-autorizacion">Observación / Evidencia (opcional)</Label>
+                                <Textarea
+                                    id="observacion-autorizacion"
+                                    rows={3}
+                                    placeholder="Ej. captura de WhatsApp, referencia de la conversación..."
+                                    value={authData.observacion}
+                                    onChange={(e) => setAuthData('observacion', e.target.value)}
+                                />
+                                <InputError message={authErrors.observacion} />
+                            </div>
+
+                            <DialogFooter>
+                                <Button type="button" variant="outline" onClick={() => setAuthorizingDeficiency(null)}>
+                                    Cancelar
+                                </Button>
+                                <Button type="submit" disabled={authProcessing}>
+                                    Registrar Autorización
                                 </Button>
                             </DialogFooter>
                         </form>

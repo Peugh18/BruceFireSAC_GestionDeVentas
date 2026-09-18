@@ -6,6 +6,7 @@ use Database\Factories\DeficiencyFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -107,6 +108,14 @@ class Deficiency extends Model
     public function resueltoPorUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'resuelto_por_user_id');
+    }
+
+    /**
+     * @return HasMany<DeficiencyAuthorization, $this>
+     */
+    public function authorizations(): HasMany
+    {
+        return $this->hasMany(DeficiencyAuthorization::class);
     }
 
     /**

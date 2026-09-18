@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\DeficiencyAuthorizationController;
 use App\Http\Controllers\DeficiencyController;
 use Illuminate\Support\Facades\Route;
 
@@ -13,4 +14,8 @@ Route::middleware(['auth'])->group(function () {
     });
 
     Route::patch('deficiencies/{deficiency}/status', [DeficiencyController::class, 'updateStatus'])->name('deficiencies.status');
+
+    Route::middleware('permission:deficiencies.authorize')->group(function () {
+        Route::post('deficiencies/{deficiency}/authorizations', [DeficiencyAuthorizationController::class, 'store'])->name('deficiencies.authorizations.store');
+    });
 });

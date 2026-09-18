@@ -1,6 +1,7 @@
 import { CatalogItem } from './catalog';
 import { Equipment } from './equipment';
 import { User } from './index';
+import { Quote } from './quote';
 import { ServiceOrder } from './service-order';
 
 export type DeficiencyEstado =
@@ -10,6 +11,20 @@ export type DeficiencyEstado =
     | 'rechazada'
     | 'en_correccion'
     | 'resuelta';
+
+export type DeficiencyAuthorizationCanal = 'whatsapp' | 'presencial';
+
+export interface DeficiencyAuthorizationData {
+    id: number;
+    deficiency_id: number;
+    quote_id: number | null;
+    autorizado_por: string;
+    canal: DeficiencyAuthorizationCanal;
+    fecha: string;
+    observacion: string | null;
+    created_at: string;
+    quote?: Quote | null;
+}
 
 export interface DeficiencyData {
     id: number;
@@ -34,4 +49,5 @@ export interface DeficiencyData {
     equipment?: Equipment;
     catalog_item?: CatalogItem;
     resuelto_por_user?: User;
+    authorizations?: DeficiencyAuthorizationData[];
 }
