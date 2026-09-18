@@ -3,7 +3,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, LayoutGrid, Users, Wrench } from 'lucide-react';
+import { BookOpen, LayoutGrid, Package, Users, Wrench } from 'lucide-react';
 import AppLogo from './app-logo';
 
 export function AppSidebar() {
@@ -42,6 +42,7 @@ export function AppSidebar() {
                   },
               ]
             : []),
+        ...(auth.permissions.includes('inventory.view') ? [{ title: 'Inventario', url: route('inventory.index', {}, false), icon: Package }] : []),
     ];
 
     return (
