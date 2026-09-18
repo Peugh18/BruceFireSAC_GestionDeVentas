@@ -47,6 +47,7 @@ export default function ClientsCreate() {
                         <ClientForm
                             data={data}
                             setData={setData}
+                            setValues={(values) => setData((previous) => ({ ...previous, ...values }))}
                             errors={errors}
                             processing={processing}
                             onSubmit={submit}

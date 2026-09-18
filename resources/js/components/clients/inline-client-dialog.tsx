@@ -110,6 +110,7 @@ export function InlineClientDialog({ onCreated, trigger }: InlineClientDialogPro
                 <ClientForm
                     data={data}
                     setData={setData}
+                    setValues={(values) => setDataState((previous) => ({ ...previous, ...values }))}
                     errors={errors}
                     processing={processing}
                     onSubmit={submit}

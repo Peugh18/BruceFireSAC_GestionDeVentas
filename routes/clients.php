@@ -12,6 +12,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::middleware('permission:clients.create')->group(function () {
         Route::get('clients/create', [ClientController::class, 'create'])->name('clients.create');
+        Route::get('clients/document-lookup', [ClientController::class, 'documentLookup'])->name('clients.document-lookup');
         Route::post('clients', [ClientController::class, 'store'])->name('clients.store');
     });
 

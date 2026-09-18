@@ -43,4 +43,9 @@ return [
         'endpoint' => env('GEMINI_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta/models'),
     ],
 
+    'apisperu' => [
+        'base_url' => env('APISPERU_BASE_URL'),
+        'token' => env('APISPERU_TOKEN'),
+    ],
+
 ];

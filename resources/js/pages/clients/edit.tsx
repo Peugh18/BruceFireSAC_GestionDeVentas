@@ -48,6 +48,7 @@ export default function ClientsEdit({ client }: { client: Client }) {
                         <ClientForm
                             data={data}
                             setData={setData}
+                            setValues={(values) => setData((previous) => ({ ...previous, ...values }))}
                             errors={errors}
                             processing={processing}
                             onSubmit={submit}

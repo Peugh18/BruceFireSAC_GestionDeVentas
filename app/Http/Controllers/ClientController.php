@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Http\Requests\ClientStoreRequest;
 use App\Http\Requests\ClientUpdateRequest;
 use App\Models\Client;
+use App\Services\DocumentLookupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -55,6 +57,37 @@ class ClientController extends Controller
         $this->authorize('create', Client::class);
 
         return Inertia::render('clients/create');
+    }
+
+    /**
+     * Query document data from external APIsPeru provider.
+     */
+    public function documentLookup(Request $request, DocumentLookupService $lookupService): JsonResponse
+    {
+        $this->authorize('create', Client::class);
+
+        $validated = $request->validate([
+            'tipo_documento' => ['required', Rule::in(['dni', 'ruc', 'ce', 'pasaporte'])],
+            'numero' => [
+                'required',
+                'string',
+                Rule::when($request->query('tipo_documento') === 'dni', ['regex:/^[0-9]{8}$/']),
+                Rule::when($request->query('tipo_documento') === 'ruc', ['regex:/^[0-9]{11}$/']),
+            ],
+        ]);
+
+        $tipo = $validated['tipo_documento'];
+        $numero = trim($validated['numero']);
+
+        if ($tipo === 'dni') {
+            $data = $lookupService->lookupDni($numero);
+        } elseif ($tipo === 'ruc') {
+            $data = $lookupService->lookupRuc($numero);
+        } else {
+            $data = null;
+        }
+
+        return response()->json(['data' => $data]);
     }
 
     /**
