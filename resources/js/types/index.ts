@@ -2,6 +2,7 @@ import { LucideIcon } from 'lucide-react';
 
 export interface Auth {
     user: User;
+    can_view_catalog: boolean;
 }
 
 export interface BreadcrumbItem {
