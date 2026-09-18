@@ -2,11 +2,13 @@ import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { type SharedData } from '@/types';
+import { type CertificateTipo } from '@/types/certificate';
 import { type ServiceOrder, type ServiceOrderLabels, type TechnicianOption } from '@/types/service-order';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { type FormEventHandler } from 'react';
@@ -17,6 +19,114 @@ interface Props extends ServiceOrderLabels {
     canAssign: boolean;
     technicians: TechnicianOption[];
     status?: string;
+}
+
+const CERTIFICATE_TIPO_LABELS: Record<CertificateTipo, string> = {
+    operatividad_garantia: 'Operatividad y Garantía',
+    prueba_hidrostatica: 'Prueba Hidrostática',
+    capacitacion: 'Capacitación / Participación',
+    deteccion_alarma: 'Operatividad de Detección/Alarma',
+    otro: 'Otro',
+};
+
+function GenerateCertificate({ order }: Pick<Props, 'order'>) {
+    const { data, setData, post, errors, processing } = useForm({
+        service_order_id: order.id,
+        tipo: 'operatividad_garantia' as CertificateTipo,
+        fecha_emision: new Date().toISOString().slice(0, 10),
+        fecha_vigencia: '',
+        observaciones: '',
+        equipment_ids: order.equipment.map((item) => item.id),
+    });
+
+    const toggleEquipment = (equipmentId: number, checked: boolean) => {
+        setData('equipment_ids', checked ? [...data.equipment_ids, equipmentId] : data.equipment_ids.filter((id) => id !== equipmentId));
+    };
+
+    const submit: FormEventHandler = (event) => {
+        event.preventDefault();
+        post(route('certificates.store'));
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Generar certificado</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <form onSubmit={submit} className="space-y-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="certificate-tipo">Tipo de certificado</Label>
+                        <Select value={data.tipo} onValueChange={(value) => setData('tipo', value as CertificateTipo)}>
+                            <SelectTrigger id="certificate-tipo">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {Object.entries(CERTIFICATE_TIPO_LABELS).map(([value, label]) => (
+                                    <SelectItem key={value} value={value}>
+                                        {label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <InputError message={errors.tipo} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="certificate-fecha-emision">Fecha de emisión</Label>
+                        <input
+                            id="certificate-fecha-emision"
+                            type="date"
+                            className="border-input bg-background h-9 rounded-md border px-3 text-sm"
+                            value={data.fecha_emision}
+                            onChange={(event) => setData('fecha_emision', event.target.value)}
+                        />
+                        <InputError message={errors.fecha_emision} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="certificate-fecha-vigencia">Vigencia hasta (opcional)</Label>
+                        <input
+                            id="certificate-fecha-vigencia"
+                            type="date"
+                            className="border-input bg-background h-9 rounded-md border px-3 text-sm"
+                            value={data.fecha_vigencia}
+                            onChange={(event) => setData('fecha_vigencia', event.target.value)}
+                        />
+                        <InputError message={errors.fecha_vigencia} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="certificate-observaciones">Observaciones (opcional)</Label>
+                        <Textarea
+                            id="certificate-observaciones"
+                            value={data.observaciones}
+                            onChange={(event) => setData('observaciones', event.target.value)}
+                        />
+                        <InputError message={errors.observaciones} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>Equipos incluidos</Label>
+                        <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border p-2">
+                            {order.equipment.map((item) => (
+                                <div key={item.id} className="flex items-center gap-2">
+                                    <Checkbox
+                                        id={`certificate-equipment-${item.id}`}
+                                        checked={data.equipment_ids.includes(item.id)}
+                                        onCheckedChange={(checked) => toggleEquipment(item.id, Boolean(checked))}
+                                    />
+                                    <label htmlFor={`certificate-equipment-${item.id}`} className="text-sm">
+                                        {item.codigo} · {item.tipo_equipo}
+                                    </label>
+                                </div>
+                            ))}
+                        </div>
+                        <InputError message={errors.equipment_ids} />
+                    </div>
+                    <Button type="submit" disabled={processing || data.equipment_ids.length === 0} className="w-full">
+                        {processing ? 'Generando...' : 'Generar certificado'}
+                    </Button>
+                </form>
+            </CardContent>
+        </Card>
+    );
 }
 
 function AdvanceStatus({ order, transitions, statuses }: Pick<Props, 'order' | 'transitions' | 'statuses'>) {
@@ -234,6 +344,9 @@ export default function ServiceOrdersShow({ order, transitions, statuses, servic
                             statuses={statuses}
                         />
                         {canAssign && <AssignTechnician key={`${order.id}-${order.tecnico_user_id}`} order={order} technicians={technicians} />}
+                        {auth.permissions.includes('certificates.issue') && order.equipment.length > 0 && (
+                            <GenerateCertificate key={`${order.id}-certificate`} order={order} />
+                        )}
                     </div>
                 </div>
             </div>

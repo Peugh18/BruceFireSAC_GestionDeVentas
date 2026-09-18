@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
         $this->call(CatalogPermissionsSeeder::class);
         $this->call(EquipmentPermissionsSeeder::class);
         $this->call(ChecklistPermissionsSeeder::class);
+        $this->call(CertificatePermissionsSeeder::class);
 
         $user = User::factory()->create([
             'name' => 'Test User',
