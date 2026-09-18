@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreSaleRequest;
 use App\Models\CatalogItem;
 use App\Models\Client;
+use App\Models\ElectronicDocument;
 use App\Models\Sale;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -165,8 +166,13 @@ class SaleController extends Controller
             'installments',
         ]);
 
+        $electronicDocument = ElectronicDocument::where('sale_id', $sale->id)->first();
+
         return Inertia::render('sales/show', [
             'sale' => $sale,
+            'electronicDocument' => $electronicDocument,
+            'tipoLabels' => ElectronicDocument::TIPO_LABELS,
+            'estadoLabels' => ElectronicDocument::ESTADO_LABELS,
         ]);
     }
 }

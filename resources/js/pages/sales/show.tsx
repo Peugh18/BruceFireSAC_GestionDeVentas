@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
+import { type BreadcrumbItem, type SharedData } from '@/types';
+import { type ElectronicDocumentData, type ElectronicDocumentEstado } from '@/types/electronic-document';
 import { type InstallmentEstado, type Sale, type SaleEstado } from '@/types/sale';
-import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { AlertCircle, ArrowLeft, CheckCircle2, Clock, RefreshCw, ShieldAlert, XCircle } from 'lucide-react';
 
 const ESTADO_BADGE_VARIANT: Record<SaleEstado, 'default' | 'secondary' | 'destructive'> = {
     pendiente: 'secondary',
@@ -22,12 +23,166 @@ const INSTALLMENT_BADGE_VARIANT: Record<InstallmentEstado, 'default' | 'secondar
     vencido: 'destructive',
 };
 
+const DOCUMENT_BADGE_VARIANT: Record<ElectronicDocumentEstado, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+    pendiente: 'secondary',
+    aceptado: 'default',
+    rechazado: 'destructive',
+    error: 'destructive',
+};
+
+const DOCUMENT_ICON: Record<ElectronicDocumentEstado, typeof CheckCircle2> = {
+    pendiente: Clock,
+    aceptado: CheckCircle2,
+    rechazado: XCircle,
+    error: AlertCircle,
+};
+
 const formatCurrency = (amount: number | string) => {
     const numeric = typeof amount === 'string' ? parseFloat(amount) : amount;
     return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(numeric || 0);
 };
 
-export default function SaleShow({ sale, status }: { sale: Sale; status?: string }) {
+function BillingCard({
+    sale,
+    electronicDocument,
+    tipoLabels,
+    estadoLabels,
+}: {
+    sale: Sale;
+    electronicDocument: ElectronicDocumentData | null;
+    tipoLabels: Record<string, string>;
+    estadoLabels: Record<string, string>;
+}) {
+    const { auth } = usePage<SharedData>().props;
+    const canIssue = auth.permissions.includes('billing.issue');
+    const canRetry = auth.permissions.includes('billing.retry');
+
+    const issueForm = useForm({});
+    const retryForm = useForm({});
+
+    const issue = () => {
+        issueForm.post(route('billing.issue', sale.id), { preserveScroll: true });
+    };
+
+    const retry = () => {
+        if (!electronicDocument) return;
+        retryForm.post(route('billing.retry', electronicDocument.id), { preserveScroll: true });
+    };
+
+    const refresh = () => {
+        router.reload({ only: ['electronicDocument'] });
+    };
+
+    if (!electronicDocument) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Comprobante Electrónico</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                        Esta venta aun no tiene un comprobante electronico. Se emitira{' '}
+                        <span className="font-medium text-foreground">
+                            {sale.client?.tipo_documento === 'ruc' ? 'factura' : 'boleta'}
+                        </span>{' '}
+                        segun el tipo de documento del cliente.
+                    </p>
+                    {canIssue ? (
+                        <Button onClick={issue} disabled={issueForm.processing} className="w-full">
+                            {issueForm.processing ? 'Enviando a cola...' : 'Emitir comprobante'}
+                        </Button>
+                    ) : (
+                        <p className="text-xs text-muted-foreground">No tienes permiso para emitir comprobantes.</p>
+                    )}
+                </CardContent>
+            </Card>
+        );
+    }
+
+    const Icon = DOCUMENT_ICON[electronicDocument.estado];
+
+    return (
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-3">
+                <CardTitle>Comprobante Electrónico</CardTitle>
+                <Badge variant={DOCUMENT_BADGE_VARIANT[electronicDocument.estado]} className="gap-1.5">
+                    <Icon className="size-3.5" />
+                    {estadoLabels[electronicDocument.estado] ?? electronicDocument.estado}
+                </Badge>
+            </CardHeader>
+            <CardContent className="space-y-3">
+                <dl className="divide-y">
+                    <div className="grid grid-cols-3 gap-2 py-2 text-sm">
+                        <dt className="text-muted-foreground">Tipo</dt>
+                        <dd className="col-span-2">{tipoLabels[electronicDocument.tipo] ?? electronicDocument.tipo}</dd>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 py-2 text-sm">
+                        <dt className="text-muted-foreground">Numero</dt>
+                        <dd className="col-span-2 font-mono">
+                            {electronicDocument.serie}-{electronicDocument.correlativo}
+                        </dd>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 py-2 text-sm">
+                        <dt className="text-muted-foreground">Intentos</dt>
+                        <dd className="col-span-2">{electronicDocument.intentos}</dd>
+                    </div>
+                    {electronicDocument.fecha_envio && (
+                        <div className="grid grid-cols-3 gap-2 py-2 text-sm">
+                            <dt className="text-muted-foreground">Ultimo envio</dt>
+                            <dd className="col-span-2">{new Date(electronicDocument.fecha_envio).toLocaleString('es-PE')}</dd>
+                        </div>
+                    )}
+                </dl>
+
+                {electronicDocument.estado === 'pendiente' && (
+                    <div className="flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-sm">
+                        <Clock className="size-4 shrink-0 text-muted-foreground" />
+                        En cola de envio a SUNAT. Actualiza para ver el resultado.
+                    </div>
+                )}
+
+                {electronicDocument.respuesta_sunat && (
+                    <div className="rounded-lg border px-3 py-2 text-sm">
+                        <p className="text-xs font-medium text-muted-foreground">Respuesta SUNAT</p>
+                        <p className="mt-1 break-words">{electronicDocument.respuesta_sunat}</p>
+                    </div>
+                )}
+
+                {electronicDocument.error && (
+                    <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/5 px-3 py-2 text-sm">
+                        <ShieldAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
+                        <p className="break-words text-destructive">{electronicDocument.error}</p>
+                    </div>
+                )}
+
+                <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={refresh} className="gap-1.5">
+                        <RefreshCw className="size-3.5" /> Actualizar estado
+                    </Button>
+                    {electronicDocument.estado === 'error' && canRetry && (
+                        <Button size="sm" onClick={retry} disabled={retryForm.processing}>
+                            {retryForm.processing ? 'Reintentando...' : 'Reintentar envio'}
+                        </Button>
+                    )}
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+export default function SaleShow({
+    sale,
+    electronicDocument,
+    tipoLabels,
+    estadoLabels,
+    status,
+}: {
+    sale: Sale;
+    electronicDocument: ElectronicDocumentData | null;
+    tipoLabels: Record<string, string>;
+    estadoLabels: Record<string, string>;
+    status?: string;
+}) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Ventas', href: route('sales.index') },
         { title: sale.numero, href: route('sales.show', sale.id) },
@@ -128,6 +283,8 @@ export default function SaleShow({ sale, status }: { sale: Sale; status?: string
                             </div>
                         </CardContent>
                     </Card>
+
+                    <BillingCard sale={sale} electronicDocument={electronicDocument} tipoLabels={tipoLabels} estadoLabels={estadoLabels} />
                 </div>
 
                 <Card>
